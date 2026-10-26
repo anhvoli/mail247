@@ -253,11 +253,6 @@ export default function App() {
             <div className="bg-[#e63b2e] text-white px-3.5 py-1 border-3 border-[#111111] shadow-brutal-sm font-heading text-xl tracking-wider uppercase transform -rotate-1">
               MAIL247 // SINGLE_MODE
             </div>
-            <div className="hidden sm:block">
-              <span className="text-white font-heading text-lg tracking-wide uppercase stroke-title">
-                CHỈ ĐỌC 1 HÒM THƯ DUY NHẤT
-              </span>
-            </div>
           </div>
 
           {/* System status */}
