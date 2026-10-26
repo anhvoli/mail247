@@ -1,5 +1,5 @@
 {
-  "name": "custom-mail-react",
+  "name": "mail247-reader",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -14,8 +14,7 @@
     "lucide-react": "^0.453.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "tailwind-merge": "^2.5.4",
-    "zustand": "^5.0.0"
+    "tailwind-merge": "^2.5.4"
   },
   "devDependencies": {
     "@types/react": "^18.3.11",
