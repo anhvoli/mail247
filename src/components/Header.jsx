@@ -12,12 +12,6 @@ export default function Header() {
         </div>
 
         {/* System status */}
-        <div className="flex items-center gap-2">
-          <div className="bg-[#ffc900] text-[#111111] px-3 py-1 border-2 border-[#111111] shadow-brutal-sm text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 bg-[#33ff66] border border-[#111111] animate-ping" />
-            <span>SINGLE_INBOX: LIVE</span>
-          </div>
-        </div>
       </div>
     </header>
   );
