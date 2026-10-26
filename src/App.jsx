@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Mail,
   RefreshCw,
@@ -17,20 +17,20 @@ import {
   Dices,
   Terminal,
   Radio,
-  Edit3
-} from 'lucide-react';
-import DOMPurify from 'dompurify';
+  Edit3,
+} from "lucide-react";
+import DOMPurify from "dompurify";
 
-const API_BASE = 'https://custom-mail-worker.anhvoli826.workers.dev';
-const DOMAINS = ['qoder.io.vn', 'anhvoli.id.vn'];
+const API_BASE = "https://custom-mail-worker.anhvoli826.workers.dev";
+const DOMAINS = ["qoder.io.vn", "anhvoli.id.vn"];
 
 // Trích xuất mã OTP từ text và html
-function extractOtp(text = '', html = '') {
-  const content = (text || '') + ' ' + (html || '');
+function extractOtp(text = "", html = "") {
+  const content = (text || "") + " " + (html || "");
   const patterns = [
     /(?:mã(?:\s+xác\s+thực|\s+xác\s+nhận|\s+otp)?|code|otp|verification(?:\s+code)?|security\s+code)[\s:=#\-–]+([0-9A-Za-z]{4,8})\b/i,
     /(?:nhập\s+mã|enter\s+code)[\s:=#\-–]+([0-9A-Za-z]{4,8})\b/i,
-    /(?:is|là)[\s:=#\-–]+([0-9]{4,8})\b/i
+    /(?:is|là)[\s:=#\-–]+([0-9]{4,8})\b/i,
   ];
   for (const pattern of patterns) {
     const match = content.match(pattern);
@@ -44,8 +44,9 @@ function extractOtp(text = '', html = '') {
 }
 
 // Trích xuất link xác nhận nếu có
-function extractLink(html = '', text = '') {
-  const urlPattern = /https?:\/\/[^\s"'<>]+(?:verify|confirm|activate|token|auth)[^\s"'<>]+/i;
+function extractLink(html = "", text = "") {
+  const urlPattern =
+    /https?:\/\/[^\s"'<>]+(?:verify|confirm|activate|token|auth)[^\s"'<>]+/i;
   const mHtml = html.match(urlPattern);
   if (mHtml) return mHtml[0];
   const mText = text.match(urlPattern);
@@ -56,10 +57,10 @@ function extractLink(html = '', text = '') {
 export default function App() {
   // Chỉ lưu và theo dõi DUY NHẤT 1 EMAIL tại một thời điểm
   const [activeEmail, setActiveEmail] = useState(() => {
-    return localStorage.getItem('mail247_single_email') || 'yenbeo@qoder.io.vn';
+    return localStorage.getItem("mail247_single_email") || "yenbeo@qoder.io.vn";
   });
 
-  const [inputEmail, setInputEmail] = useState('');
+  const [inputEmail, setInputEmail] = useState("");
   const [selectedDomain, setSelectedDomain] = useState(DOMAINS[0]);
   const [isChangingEmail, setIsChangingEmail] = useState(false);
 
@@ -70,32 +71,35 @@ export default function App() {
 
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [countdown, setCountdown] = useState(5);
-  const [activeTab, setActiveTab] = useState('html');
+  const [activeTab, setActiveTab] = useState("html");
   const [copiedOtp, setCopiedOtp] = useState(false);
   const [copiedEmail, setCopiedEmail] = useState(false);
-  const [searchFilter, setSearchFilter] = useState('');
+  const [searchFilter, setSearchFilter] = useState("");
 
   // Lưu email hiện tại vào localStorage
   useEffect(() => {
-    localStorage.setItem('mail247_single_email', activeEmail);
+    localStorage.setItem("mail247_single_email", activeEmail);
   }, [activeEmail]);
 
   // Đổi sang một email duy nhất khác
-  const switchEmail = useCallback((target) => {
-    let email = target.trim().toLowerCase();
-    if (!email) return;
-    if (!email.includes('@')) {
-      email = `${email}@${selectedDomain}`;
-    }
-    setActiveEmail(email);
-    setSelectedMessage(null);
-    setIsChangingEmail(false);
-    setInputEmail('');
-  }, [selectedDomain]);
+  const switchEmail = useCallback(
+    (target) => {
+      let email = target.trim().toLowerCase();
+      if (!email) return;
+      if (!email.includes("@")) {
+        email = `${email}@${selectedDomain}`;
+      }
+      setActiveEmail(email);
+      setSelectedMessage(null);
+      setIsChangingEmail(false);
+      setInputEmail("");
+    },
+    [selectedDomain],
+  );
 
   // Tạo email ngẫu nhiên duy nhất
   const handleRandomize = () => {
-    const prefixes = ['alpha', 'delta', 'neo', 'cyber', 'user', 'acc', 'fast'];
+    const prefixes = ["alpha", "delta", "neo", "cyber", "user", "acc", "fast"];
     const rand = `${prefixes[Math.floor(Math.random() * prefixes.length)]}_${Math.floor(1000 + Math.random() * 9000)}`;
     const full = `${rand}@${selectedDomain}`;
     switchEmail(full);
@@ -106,13 +110,15 @@ export default function App() {
     if (!email) return;
     setLoadingMessages(true);
     try {
-      const res = await fetch(`${API_BASE}/api/inbox?email=${encodeURIComponent(email)}`);
+      const res = await fetch(
+        `${API_BASE}/api/inbox?email=${encodeURIComponent(email)}`,
+      );
       const json = await res.json();
       if (json.success) {
         setMessages(json.data || []);
       }
     } catch (err) {
-      console.error('Lỗi tải hộp thư:', err);
+      console.error("Lỗi tải hộp thư:", err);
     } finally {
       setLoadingMessages(false);
     }
@@ -127,13 +133,15 @@ export default function App() {
       const json = await res.json();
       if (json.success) {
         setSelectedMessage(json.data);
-        fetch(`${API_BASE}/api/message/${id}/read`, { method: 'PATCH' }).catch(() => {});
+        fetch(`${API_BASE}/api/message/${id}/read`, { method: "PATCH" }).catch(
+          () => {},
+        );
         setMessages((prev) =>
-          prev.map((m) => (m.id === id ? { ...m, is_read: 1 } : m))
+          prev.map((m) => (m.id === id ? { ...m, is_read: 1 } : m)),
         );
       }
     } catch (err) {
-      console.error('Lỗi chi tiết thư:', err);
+      console.error("Lỗi chi tiết thư:", err);
     } finally {
       setLoadingDetail(false);
     }
@@ -141,15 +149,15 @@ export default function App() {
 
   // Xóa một thư
   const deleteOneMessage = async (id) => {
-    if (!id || !window.confirm('BẠN CÓ CHẮC MUỐN XÓA THƯ NÀY?')) return;
+    if (!id || !window.confirm("BẠN CÓ CHẮC MUỐN XÓA THƯ NÀY?")) return;
     try {
-      await fetch(`${API_BASE}/api/message/${id}`, { method: 'DELETE' });
+      await fetch(`${API_BASE}/api/message/${id}`, { method: "DELETE" });
       setMessages((prev) => prev.filter((m) => m.id !== id));
       if (selectedMessage?.id === id) {
         setSelectedMessage(null);
       }
     } catch (err) {
-      console.error('Lỗi xóa thư:', err);
+      console.error("Lỗi xóa thư:", err);
     }
   };
 
@@ -158,11 +166,14 @@ export default function App() {
     if (!activeEmail || messages.length === 0) return;
     if (!window.confirm(`XÓA TẤT CẢ THƯ TRONG HÒM THƯ ${activeEmail}?`)) return;
     try {
-      await fetch(`${API_BASE}/api/inbox?email=${encodeURIComponent(activeEmail)}`, { method: 'DELETE' });
+      await fetch(
+        `${API_BASE}/api/inbox?email=${encodeURIComponent(activeEmail)}`,
+        { method: "DELETE" },
+      );
       setMessages([]);
       setSelectedMessage(null);
     } catch (err) {
-      console.error('Lỗi dọn hòm thư:', err);
+      console.error("Lỗi dọn hòm thư:", err);
     }
   };
 
@@ -207,7 +218,9 @@ export default function App() {
 
   const currentOtp =
     selectedMessage?.otp_code ||
-    (selectedMessage ? extractOtp(selectedMessage.text_content, selectedMessage.html_content) : null);
+    (selectedMessage
+      ? extractOtp(selectedMessage.text_content, selectedMessage.html_content)
+      : null);
 
   const verificationLink = selectedMessage
     ? extractLink(selectedMessage.html_content, selectedMessage.text_content)
@@ -215,10 +228,10 @@ export default function App() {
 
   const sanitizedHtml = selectedMessage?.html_content
     ? DOMPurify.sanitize(selectedMessage.html_content, {
-        ADD_ATTR: ['target'],
-        FORBID_TAGS: ['script', 'iframe']
+        ADD_ATTR: ["target"],
+        FORBID_TAGS: ["script", "iframe"],
       })
-    : '';
+    : "";
 
   const filteredMessages = messages.filter((m) => {
     const q = searchFilter.toLowerCase();
@@ -280,19 +293,25 @@ export default function App() {
                 onClick={handleCopyActiveEmail}
                 className="btn-brutal px-4 py-2 bg-[#ffc900] text-[#111111] font-heading text-sm tracking-wider uppercase border-2 border-[#111111] shadow-brutal-sm flex items-center gap-1.5 cursor-pointer"
               >
-                {copiedEmail ? <Check className="w-4 h-4 stroke-[3] text-emerald-800" /> : <Copy className="w-4 h-4 stroke-[2.5]" />}
-                <span>{copiedEmail ? 'ĐÃ SAO CHÉP' : 'SAO CHÉP EMAIL'}</span>
+                {copiedEmail ? (
+                  <Check className="w-4 h-4 stroke-[3] text-emerald-800" />
+                ) : (
+                  <Copy className="w-4 h-4 stroke-[2.5]" />
+                )}
+                <span>{copiedEmail ? "ĐÃ SAO CHÉP" : "SAO CHÉP EMAIL"}</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setIsChangingEmail(!isChangingEmail)}
                 className={`btn-brutal px-3.5 py-2 border-2 border-[#111111] font-heading text-sm uppercase tracking-wider shadow-brutal-sm flex items-center gap-1.5 cursor-pointer ${
-                  isChangingEmail ? 'bg-[#e63b2e] text-white' : 'bg-white text-[#111111] hover:bg-slate-100'
+                  isChangingEmail
+                    ? "bg-[#e63b2e] text-white"
+                    : "bg-white text-[#111111] hover:bg-slate-100"
                 }`}
               >
                 <Edit3 className="w-4 h-4 stroke-[2.5]" />
-                <span>{isChangingEmail ? 'ĐÓNG' : 'ĐỔI EMAIL KHÁC'}</span>
+                <span>{isChangingEmail ? "ĐÓNG" : "ĐỔI EMAIL KHÁC"}</span>
               </button>
             </div>
           </div>
@@ -321,7 +340,9 @@ export default function App() {
                   autoFocus
                 />
                 <div className="flex items-center px-3 bg-[#b9b8f2] border-l-3 border-[#111111]">
-                  <span className="font-heading text-lg mr-1 text-[#111111]">@</span>
+                  <span className="font-heading text-lg mr-1 text-[#111111]">
+                    @
+                  </span>
                   <select
                     value={selectedDomain}
                     onChange={(e) => setSelectedDomain(e.target.value)}
@@ -387,7 +408,9 @@ export default function App() {
                   className="btn-brutal px-3 py-1 bg-white border-2 border-[#111111] shadow-brutal-sm font-heading text-xs tracking-wider uppercase hover:bg-[#ffc900] cursor-pointer flex items-center gap-1.5"
                   title="Làm mới hộp thư"
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 stroke-[2.5] ${loadingMessages ? 'animate-spin' : ''}`} />
+                  <RefreshCw
+                    className={`w-3.5 h-3.5 stroke-[2.5] ${loadingMessages ? "animate-spin" : ""}`}
+                  />
                   <span>LÀM MỚI</span>
                 </button>
 
@@ -408,11 +431,14 @@ export default function App() {
                   type="button"
                   onClick={() => setAutoRefresh(!autoRefresh)}
                   className={`btn-brutal px-2 py-1 border-2 border-[#111111] font-bold uppercase text-[10px] flex items-center gap-1.5 cursor-pointer ${
-                    autoRefresh ? 'bg-[#33ff66] text-[#111111] shadow-brutal-sm' : 'bg-slate-200 text-slate-500'
+                    autoRefresh
+                      ? "bg-[#33ff66] text-[#111111] shadow-brutal-sm"
+                      : "bg-slate-200 text-slate-500"
                   }`}
                 >
-                  <span className={`w-2 h-2 ${autoRefresh ? 'bg-[#111111] animate-ping' : 'bg-slate-400'}`} />
-                  <span>AUTO: {autoRefresh ? `${countdown}S` : 'OFF'}</span>
+                  <span
+                    className={`w-2 h-2 ${autoRefresh ? "bg-[#111111] animate-ping" : "bg-slate-400"}`}
+                  />
                 </button>
 
                 <span className="font-mono font-bold text-xs bg-[#0b0b2b] text-white px-2 py-0.5 border border-[#111111]">
@@ -444,9 +470,8 @@ export default function App() {
             ) : filteredMessages.length === 0 ? (
               <div className="p-8 text-center border-2 border-dashed border-[#111111] bg-white space-y-2">
                 <Inbox className="w-10 h-10 mx-auto opacity-40 stroke-[2]" />
-                <p className="font-heading text-base uppercase text-[#111111]">HÒM THƯ TRỐNG</p>
-                <p className="text-xs text-slate-500 font-bold max-w-xs mx-auto">
-                  Chưa có email nào gửi tới {activeEmail}. Khi có thư mới, nó sẽ tự xuất hiện ngay tại đây!
+                <p className="font-heading text-base uppercase text-[#111111]">
+                  HÒM THƯ TRỐNG
                 </p>
               </div>
             ) : (
@@ -459,10 +484,10 @@ export default function App() {
                     onClick={() => fetchDetail(msg.id)}
                     className={`btn-brutal p-3 border-3 border-[#111111] cursor-pointer transition-all ${
                       isSelected
-                        ? 'bg-[#ffc900] shadow-brutal translate-x-1'
+                        ? "bg-[#ffc900] shadow-brutal translate-x-1"
                         : isUnread
-                        ? 'bg-white shadow-brutal hover:bg-amber-50'
-                        : 'bg-white shadow-brutal-sm hover:bg-slate-50'
+                          ? "bg-white shadow-brutal hover:bg-amber-50"
+                          : "bg-white shadow-brutal-sm hover:bg-slate-50"
                     }`}
                   >
                     <div className="flex items-center justify-between gap-1 mb-1">
@@ -475,17 +500,22 @@ export default function App() {
                         </span>
                       </div>
                       <span className="text-[10px] font-mono font-bold text-slate-500">
-                        {msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                        {msg.created_at
+                          ? new Date(msg.created_at).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          : ""}
                       </span>
                     </div>
 
                     <div className="text-xs font-bold truncate mb-1 text-slate-900">
-                      {msg.subject || '(KHÔNG CÓ TIÊU ĐỀ)'}
+                      {msg.subject || "(KHÔNG CÓ TIÊU ĐỀ)"}
                     </div>
 
                     <div className="flex items-center justify-between gap-2 mt-2">
                       <p className="text-[11px] text-slate-600 truncate line-clamp-1 font-medium flex-1">
-                        {msg.snippet || 'Nhấp để xem nội dung...'}
+                        {msg.snippet || "Nhấp để xem nội dung..."}
                       </p>
                       {msg.otp_code && (
                         <span className="px-2 py-0.5 bg-[#ff8a1e] text-[#111111] border-2 border-[#111111] font-mono text-[11px] font-extrabold shadow-2xs whitespace-nowrap">
@@ -521,7 +551,9 @@ export default function App() {
             <div className="flex-1 flex items-center justify-center p-8 bg-[#0b0b2b] text-[#33ff66] font-mono">
               <div className="text-center space-y-3">
                 <RefreshCw className="w-8 h-8 animate-spin mx-auto stroke-[3]" />
-                <p className="text-sm uppercase font-bold tracking-wider">ĐANG GIẢI MÃ NỘI DUNG MIME...</p>
+                <p className="text-sm uppercase font-bold tracking-wider">
+                  ĐANG GIẢI MÃ NỘI DUNG MIME...
+                </p>
               </div>
             </div>
           ) : !selectedMessage ? (
@@ -533,7 +565,8 @@ export default function App() {
                 CHƯA CHỌN GÓI THƯ NÀO
               </h3>
               <p className="text-xs text-[#33ff66] font-mono mt-1 max-w-sm">
-                Bấm vào một email bên cột trái để bóc tách mã xác nhận OTP và đọc toàn bộ nội dung.
+                Bấm vào một email bên cột trái để bóc tách mã xác nhận OTP và
+                đọc toàn bộ nội dung.
               </p>
             </div>
           ) : (
@@ -542,7 +575,7 @@ export default function App() {
               <div className="p-4 border-b-3 border-[#111111] bg-white space-y-3">
                 <div className="flex items-start justify-between gap-3">
                   <h2 className="font-heading text-xl md:text-2xl text-[#111111] leading-tight uppercase">
-                    {selectedMessage.subject || '(KHÔNG CÓ TIÊU ĐỀ)'}
+                    {selectedMessage.subject || "(KHÔNG CÓ TIÊU ĐỀ)"}
                   </h2>
                   <button
                     type="button"
@@ -557,12 +590,19 @@ export default function App() {
                 <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono font-bold bg-slate-100 p-2 border-2 border-[#111111]">
                   <div>
                     <span className="text-slate-500">TỪ: </span>
-                    <span className="text-[#111111] font-bold">{selectedMessage.sender_name || selectedMessage.sender}</span>
-                    <span className="text-slate-500"> &lt;{selectedMessage.sender}&gt;</span>
+                    <span className="text-[#111111] font-bold">
+                      {selectedMessage.sender_name || selectedMessage.sender}
+                    </span>
+                    <span className="text-slate-500">
+                      {" "}
+                      &lt;{selectedMessage.sender}&gt;
+                    </span>
                   </div>
                   <div>
                     <span className="text-slate-500">ĐẾN: </span>
-                    <span className="text-[#e63b2e] font-bold">{selectedMessage.recipient}</span>
+                    <span className="text-[#e63b2e] font-bold">
+                      {selectedMessage.recipient}
+                    </span>
                   </div>
                 </div>
 
@@ -576,7 +616,9 @@ export default function App() {
                           [SECURITY_SCANNER // OTP_DETECTED]
                         </span>
                       </div>
-                      <span className="font-mono text-[11px] text-[#33ff66]">EXP: 10 MINS</span>
+                      <span className="font-mono text-[11px] text-[#33ff66]">
+                        EXP: 10 MINS
+                      </span>
                     </div>
 
                     <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-1">
@@ -594,8 +636,8 @@ export default function App() {
                         onClick={() => handleCopyOtp(currentOtp)}
                         className={`btn-brutal px-6 py-3 border-3 border-[#111111] font-heading text-lg uppercase tracking-wider shadow-brutal flex items-center gap-2 cursor-pointer transition-all ${
                           copiedOtp
-                            ? 'bg-[#33ff66] text-[#111111]'
-                            : 'bg-[#ff8a1e] text-[#111111] hover:bg-[#ff9933]'
+                            ? "bg-[#33ff66] text-[#111111]"
+                            : "bg-[#ff8a1e] text-[#111111] hover:bg-[#ff9933]"
                         }`}
                       >
                         {copiedOtp ? (
@@ -617,7 +659,9 @@ export default function App() {
                 {/* Link kích hoạt nếu có */}
                 {verificationLink && (
                   <div className="p-2.5 bg-[#ffc900] border-2 border-[#111111] shadow-brutal-sm flex items-center justify-between gap-2 text-xs font-bold">
-                    <span className="truncate text-[#111111]">LINK: {verificationLink}</span>
+                    <span className="truncate text-[#111111]">
+                      LINK: {verificationLink}
+                    </span>
                     <a
                       href={verificationLink}
                       target="_blank"
@@ -635,39 +679,44 @@ export default function App() {
                   <div className="flex gap-2">
                     <button
                       type="button"
-                      onClick={() => setActiveTab('html')}
+                      onClick={() => setActiveTab("html")}
                       className={`btn-brutal px-3 py-1 border-2 border-[#111111] font-heading uppercase tracking-wider text-xs cursor-pointer ${
-                        activeTab === 'html' ? 'bg-[#ffc900] text-[#111111] shadow-brutal-sm' : 'bg-white text-slate-600'
+                        activeTab === "html"
+                          ? "bg-[#ffc900] text-[#111111] shadow-brutal-sm"
+                          : "bg-white text-slate-600"
                       }`}
                     >
                       XEM GIAO DIỆN HTML
                     </button>
                     <button
                       type="button"
-                      onClick={() => setActiveTab('text')}
+                      onClick={() => setActiveTab("text")}
                       className={`btn-brutal px-3 py-1 border-2 border-[#111111] font-heading uppercase tracking-wider text-xs cursor-pointer ${
-                        activeTab === 'text' ? 'bg-[#ffc900] text-[#111111] shadow-brutal-sm' : 'bg-white text-slate-600'
+                        activeTab === "text"
+                          ? "bg-[#ffc900] text-[#111111] shadow-brutal-sm"
+                          : "bg-white text-slate-600"
                       }`}
                     >
                       VĂN BẢN THUẦN (PLAIN)
                     </button>
                   </div>
                   <span className="text-[10px] font-mono font-bold bg-[#b9b8f2] text-[#111111] px-2 py-0.5 border border-[#111111]">
-                    {activeTab === 'html' ? 'DOMPURIFY_SANITIZED' : 'RAW_TEXT'}
+                    {activeTab === "html" ? "DOMPURIFY_SANITIZED" : "RAW_TEXT"}
                   </span>
                 </div>
               </div>
 
               {/* Khung nội dung Body */}
               <div className="flex-1 overflow-y-auto p-4 bg-[#f1f5f9]">
-                {activeTab === 'html' && sanitizedHtml ? (
+                {activeTab === "html" && sanitizedHtml ? (
                   <div
                     className="bg-white p-5 border-3 border-[#111111] shadow-brutal max-w-3xl mx-auto prose prose-slate max-w-none text-sm"
                     dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
                   />
                 ) : (
                   <div className="bg-[#0b0b2b] text-[#33ff66] p-4 border-3 border-[#111111] shadow-brutal max-w-3xl mx-auto font-mono text-xs whitespace-pre-wrap leading-relaxed">
-                    {selectedMessage.text_content || 'KHÔNG CÓ NỘI DUNG VĂN BẢN.'}
+                    {selectedMessage.text_content ||
+                      "KHÔNG CÓ NỘI DUNG VĂN BẢN."}
                   </div>
                 )}
               </div>
@@ -683,9 +732,7 @@ export default function App() {
             <span className="text-[#33ff66]">●</span>
             <span>MAIL247 // SINGLE_INBOX_CONSOLE</span>
           </div>
-          <div className="text-slate-400">
-            FOCUSED MODE: 1 EMAIL AT A TIME
-          </div>
+          <div className="text-slate-400">FOCUSED MODE: 1 EMAIL AT A TIME</div>
         </div>
       </footer>
     </div>
