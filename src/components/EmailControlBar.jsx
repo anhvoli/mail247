@@ -1,14 +1,16 @@
-import React, { useState } from 'react';
-import { Copy, Check, Edit3, ArrowRight, Dices } from 'lucide-react';
+import React, { useState } from "react";
+import { Copy, Check, Edit3, ArrowRight, Dices } from "lucide-react";
 
 export default function EmailControlBar({
   activeEmail,
   onSwitchEmail,
   onRandomize,
-  domains = []
+  domains = [],
 }) {
-  const [inputEmail, setInputEmail] = useState('');
-  const [selectedDomain, setSelectedDomain] = useState(domains[0] || 'qoder.io.vn');
+  const [inputEmail, setInputEmail] = useState("");
+  const [selectedDomain, setSelectedDomain] = useState(
+    domains[0] || "qoder.io.vn",
+  );
   const [isChangingEmail, setIsChangingEmail] = useState(false);
   const [copiedEmail, setCopiedEmail] = useState(false);
 
@@ -23,11 +25,11 @@ export default function EmailControlBar({
     e.preventDefault();
     if (inputEmail.trim()) {
       let email = inputEmail.trim().toLowerCase();
-      if (!email.includes('@')) {
+      if (!email.includes("@")) {
         email = `${email}@${selectedDomain}`;
       }
       onSwitchEmail(email);
-      setInputEmail('');
+      setInputEmail("");
       setIsChangingEmail(false);
     }
   };
@@ -38,11 +40,7 @@ export default function EmailControlBar({
         {/* Thẻ hiển thị Email duy nhất đang đọc */}
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 bg-[#0b0b2b] text-white p-3.5 border-3 border-[#111111] shadow-brutal-sm">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-3.5 h-3.5 bg-[#33ff66] border border-black animate-pulse flex-shrink-0" />
             <div className="min-w-0">
-              <span className="text-[10px] font-mono text-[#33ff66] uppercase tracking-widest block">
-                CURRENT_ACTIVE_INBOX:
-              </span>
               <span className="font-heading text-2xl md:text-3xl text-white tracking-wide truncate block">
                 {activeEmail}
               </span>
@@ -60,18 +58,20 @@ export default function EmailControlBar({
               ) : (
                 <Copy className="w-4 h-4 stroke-[2.5]" />
               )}
-              <span>{copiedEmail ? 'ĐÃ SAO CHÉP' : 'SAO CHÉP EMAIL'}</span>
+              <span>{copiedEmail ? "ĐÃ SAO CHÉP" : "SAO CHÉP EMAIL"}</span>
             </button>
 
             <button
               type="button"
               onClick={() => setIsChangingEmail(!isChangingEmail)}
               className={`btn-brutal px-3.5 py-2 border-2 border-[#111111] font-heading text-sm uppercase tracking-wider shadow-brutal-sm flex items-center gap-1.5 cursor-pointer ${
-                isChangingEmail ? 'bg-[#e63b2e] text-white' : 'bg-white text-[#111111] hover:bg-slate-100'
+                isChangingEmail
+                  ? "bg-[#e63b2e] text-white"
+                  : "bg-white text-[#111111] hover:bg-slate-100"
               }`}
             >
               <Edit3 className="w-4 h-4 stroke-[2.5]" />
-              <span>{isChangingEmail ? 'ĐÓNG' : 'ĐỔI EMAIL KHÁC'}</span>
+              <span>{isChangingEmail ? "ĐÓNG" : "ĐỔI EMAIL KHÁC"}</span>
             </button>
           </div>
         </div>
@@ -95,7 +95,9 @@ export default function EmailControlBar({
                 autoFocus
               />
               <div className="flex items-center px-3 bg-[#b9b8f2] border-l-3 border-[#111111]">
-                <span className="font-heading text-lg mr-1 text-[#111111]">@</span>
+                <span className="font-heading text-lg mr-1 text-[#111111]">
+                  @
+                </span>
                 <select
                   value={selectedDomain}
                   onChange={(e) => setSelectedDomain(e.target.value)}
