@@ -12,14 +12,12 @@ import {
   Calendar,
   Sparkles,
   Search,
-  X,
   Inbox,
   ArrowRight,
-  ShieldCheck,
   Dices,
   Terminal,
-  Zap,
-  Radio
+  Radio,
+  Edit3
 } from 'lucide-react';
 import DOMPurify from 'dompurify';
 
@@ -56,18 +54,14 @@ function extractLink(html = '', text = '') {
 }
 
 export default function App() {
-  const [recentEmails, setRecentEmails] = useState(() => {
-    try {
-      const saved = localStorage.getItem('mail247_recents');
-      return saved ? JSON.parse(saved) : ['yenbeo@qoder.io.vn', 'admin@qoder.io.vn'];
-    } catch {
-      return ['yenbeo@qoder.io.vn', 'admin@qoder.io.vn'];
-    }
+  // Chỉ lưu và theo dõi DUY NHẤT 1 EMAIL tại một thời điểm
+  const [activeEmail, setActiveEmail] = useState(() => {
+    return localStorage.getItem('mail247_single_email') || 'yenbeo@qoder.io.vn';
   });
 
-  const [activeEmail, setActiveEmail] = useState(() => recentEmails[0] || 'yenbeo@qoder.io.vn');
   const [inputEmail, setInputEmail] = useState('');
   const [selectedDomain, setSelectedDomain] = useState(DOMAINS[0]);
+  const [isChangingEmail, setIsChangingEmail] = useState(false);
 
   const [messages, setMessages] = useState([]);
   const [selectedMessage, setSelectedMessage] = useState(null);
@@ -80,36 +74,14 @@ export default function App() {
   const [copiedOtp, setCopiedOtp] = useState(false);
   const [copiedEmail, setCopiedEmail] = useState(false);
   const [searchFilter, setSearchFilter] = useState('');
-  const [activeInboxes, setActiveInboxes] = useState([]);
 
-  // Lưu lịch sử gần đây vào localStorage
+  // Lưu email hiện tại vào localStorage
   useEffect(() => {
-    localStorage.setItem('mail247_recents', JSON.stringify(recentEmails));
-  }, [recentEmails]);
+    localStorage.setItem('mail247_single_email', activeEmail);
+  }, [activeEmail]);
 
-  // Quét các hòm thư vừa có thư trên hệ thống
-  const checkActiveInboxes = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_BASE}/api/active-inboxes`);
-      const json = await res.json();
-      if (json.success && json.data?.length > 0) {
-        setActiveInboxes(json.data);
-        setRecentEmails((prev) => {
-          const incoming = json.data.map((d) => d.email);
-          return Array.from(new Set([...incoming, ...prev]));
-        });
-      }
-    } catch (err) {
-      console.error('Lỗi kiểm tra hòm thư hoạt động:', err);
-    }
-  }, []);
-
-  useEffect(() => {
-    checkActiveInboxes();
-  }, [checkActiveInboxes]);
-
-  // Chọn hoặc thêm một email vào danh sách theo dõi
-  const openEmail = useCallback((target) => {
+  // Đổi sang một email duy nhất khác
+  const switchEmail = useCallback((target) => {
     let email = target.trim().toLowerCase();
     if (!email) return;
     if (!email.includes('@')) {
@@ -117,36 +89,19 @@ export default function App() {
     }
     setActiveEmail(email);
     setSelectedMessage(null);
-
-    setRecentEmails((prev) => {
-      if (!prev.includes(email)) {
-        return [email, ...prev];
-      }
-      return prev;
-    });
+    setIsChangingEmail(false);
+    setInputEmail('');
   }, [selectedDomain]);
 
-  // Xóa email khỏi danh sách theo dõi
-  const removeRecent = (e, email) => {
-    e.stopPropagation();
-    const updated = recentEmails.filter((item) => item !== email);
-    setRecentEmails(updated);
-    if (activeEmail === email) {
-      const next = updated[0] || null;
-      setActiveEmail(next);
-      setSelectedMessage(null);
-    }
-  };
-
-  // Tạo email ngẫu nhiên
+  // Tạo email ngẫu nhiên duy nhất
   const handleRandomize = () => {
-    const prefixes = ['alpha', 'delta', 'neo', 'cyber', 'disc', 'user', 'zero'];
+    const prefixes = ['alpha', 'delta', 'neo', 'cyber', 'user', 'acc', 'fast'];
     const rand = `${prefixes[Math.floor(Math.random() * prefixes.length)]}_${Math.floor(1000 + Math.random() * 9000)}`;
     const full = `${rand}@${selectedDomain}`;
-    openEmail(full);
+    switchEmail(full);
   };
 
-  // Lấy danh sách thư
+  // Lấy danh sách thư của duy nhất email đang chọn
   const fetchMessages = useCallback(async (email) => {
     if (!email) return;
     setLoadingMessages(true);
@@ -198,7 +153,7 @@ export default function App() {
     }
   };
 
-  // Xóa toàn bộ hòm thư
+  // Xóa toàn bộ thư trong hòm thư hiện tại
   const clearCurrentInbox = async () => {
     if (!activeEmail || messages.length === 0) return;
     if (!window.confirm(`XÓA TẤT CẢ THƯ TRONG HÒM THƯ ${activeEmail}?`)) return;
@@ -221,20 +176,20 @@ export default function App() {
     }
   }, [activeEmail, fetchMessages]);
 
+  // Bộ đếm làm mới tự động (Auto-refresh mỗi 5s)
   useEffect(() => {
     if (!autoRefresh || !activeEmail) return;
     const timer = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {
           fetchMessages(activeEmail);
-          checkActiveInboxes();
           return 5;
         }
         return prev - 1;
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, [autoRefresh, activeEmail, fetchMessages, checkActiveInboxes]);
+  }, [autoRefresh, activeEmail, fetchMessages]);
 
   const handleCopyOtp = (otp) => {
     if (!otp) return;
@@ -277,182 +232,135 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#b9b8f2] text-[#111111] font-tech selection:bg-[#ff8a1e] selection:text-[#111111]">
-      {/* 1. HEADER CHUẨN NEO-BRUTALISM Y2K: NỀN NAVY + HOẠ TIẾT CHẤM HALFTONE */}
+      {/* 1. HEADER NEO-BRUTALISM: NỀN NAVY + HOẠ TIẾT CHẤM */}
       <header className="dot-pattern border-b-4 border-[#111111] px-4 md:px-6 py-3.5 sticky top-0 z-30 shadow-brutal">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
-          {/* Logo Tag Sticker */}
+          {/* Logo Tag */}
           <div className="flex items-center gap-3">
             <div className="bg-[#e63b2e] text-white px-3.5 py-1 border-3 border-[#111111] shadow-brutal-sm font-heading text-xl tracking-wider uppercase transform -rotate-1">
-              MAIL247 // DISC-01
+              MAIL247 // SINGLE_MODE
             </div>
             <div className="hidden sm:block">
               <span className="text-white font-heading text-lg tracking-wide uppercase stroke-title">
-                RETRO-TECH OTP CONSOLE
+                CHỈ ĐỌC 1 HÒM THƯ DUY NHẤT
               </span>
             </div>
           </div>
 
-          {/* System status stickers */}
+          {/* System status */}
           <div className="flex items-center gap-2">
-            <div className="bg-[#ffc900] text-[#111111] px-2.5 py-1 border-2 border-[#111111] shadow-brutal-sm text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-none bg-[#33ff66] border border-[#111111] animate-ping" />
-              <span>SYS: ONLINE</span>
-            </div>
-            <div className="bg-white text-[#111111] px-2.5 py-1 border-2 border-[#111111] shadow-brutal-sm text-xs font-bold uppercase tracking-wider hidden md:block">
-              0 Đ PHÍ DUY TRÌ
+            <div className="bg-[#ffc900] text-[#111111] px-3 py-1 border-2 border-[#111111] shadow-brutal-sm text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 bg-[#33ff66] border border-[#111111] animate-ping" />
+              <span>SINGLE_INBOX: LIVE</span>
             </div>
           </div>
         </div>
       </header>
 
-      {/* 2. KHU VỰC ĐIỀU KHIỂN & COMMAND BAR */}
+      {/* 2. KHU VỰC HIỂN THỊ EMAIL HIỆN TẠI & ĐỔI EMAIL */}
       <section className="max-w-7xl mx-auto w-full px-4 md:px-6 pt-5 pb-3">
-        {/* Khung Command Bar */}
-        <div className="bg-white border-4 border-[#111111] shadow-brutal p-4 space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-[#111111] pb-2">
-            <div className="flex items-center gap-2">
-              <span className="bg-[#0b0b2b] text-[#33ff66] px-2 py-0.5 text-xs font-mono font-bold border border-[#111111]">
-                TERMINAL_INPUT:
-              </span>
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                NHẬP HÒM THƯ CẦN ĐỌC HOẶC TẠO MỚI
-              </span>
+        <div className="bg-white border-4 border-[#111111] shadow-brutal p-4 space-y-3">
+          {/* Thẻ hiển thị Email duy nhất đang đọc */}
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 bg-[#0b0b2b] text-white p-3.5 border-3 border-[#111111] shadow-brutal-sm">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-3.5 h-3.5 bg-[#33ff66] border border-black animate-pulse flex-shrink-0" />
+              <div className="min-w-0">
+                <span className="text-[10px] font-mono text-[#33ff66] uppercase tracking-widest block">
+                  CURRENT_ACTIVE_INBOX:
+                </span>
+                <span className="font-heading text-2xl md:text-3xl text-white tracking-wide truncate block">
+                  {activeEmail}
+                </span>
+              </div>
             </div>
-            <div className="text-xs font-mono text-slate-500 font-bold">
-              [PROTO: CLOUDFLARE_D1]
+
+            <div className="flex items-center gap-2 flex-shrink-0 self-end md:self-center">
+              <button
+                type="button"
+                onClick={handleCopyActiveEmail}
+                className="btn-brutal px-4 py-2 bg-[#ffc900] text-[#111111] font-heading text-sm tracking-wider uppercase border-2 border-[#111111] shadow-brutal-sm flex items-center gap-1.5 cursor-pointer"
+              >
+                {copiedEmail ? <Check className="w-4 h-4 stroke-[3] text-emerald-800" /> : <Copy className="w-4 h-4 stroke-[2.5]" />}
+                <span>{copiedEmail ? 'ĐÃ SAO CHÉP' : 'SAO CHÉP EMAIL'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsChangingEmail(!isChangingEmail)}
+                className={`btn-brutal px-3.5 py-2 border-2 border-[#111111] font-heading text-sm uppercase tracking-wider shadow-brutal-sm flex items-center gap-1.5 cursor-pointer ${
+                  isChangingEmail ? 'bg-[#e63b2e] text-white' : 'bg-white text-[#111111] hover:bg-slate-100'
+                }`}
+              >
+                <Edit3 className="w-4 h-4 stroke-[2.5]" />
+                <span>{isChangingEmail ? 'ĐÓNG' : 'ĐỔI EMAIL KHÁC'}</span>
+              </button>
             </div>
           </div>
 
-          {/* Input & CTA Button */}
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (inputEmail.trim()) {
-                openEmail(inputEmail);
-                setInputEmail('');
-              }
-            }}
-            className="flex flex-col sm:flex-row items-stretch gap-2.5"
-          >
-            <div className="flex-1 flex border-3 border-[#111111] bg-white overflow-hidden shadow-brutal-sm focus-within:shadow-brutal-orange transition-all">
-              <div className="px-3 bg-[#0b0b2b] text-[#33ff66] flex items-center font-mono font-bold text-sm">
-                $
-              </div>
-              <input
-                type="text"
-                placeholder="Nhập tên hòm thư (ví dụ: yenbeo, admin, order01)..."
-                value={inputEmail}
-                onChange={(e) => setInputEmail(e.target.value)}
-                className="flex-1 px-3.5 py-2.5 text-sm md:text-base font-bold bg-white text-[#111111] outline-none placeholder-slate-400 font-tech"
-              />
-              <div className="flex items-center px-3 bg-[#b9b8f2] border-l-3 border-[#111111]">
-                <span className="font-heading text-lg mr-1 text-[#111111]">@</span>
-                <select
-                  value={selectedDomain}
-                  onChange={(e) => setSelectedDomain(e.target.value)}
-                  className="bg-transparent text-sm font-bold text-[#111111] outline-none cursor-pointer uppercase font-tech"
-                >
-                  {DOMAINS.map((d) => (
-                    <option key={d} value={d}>
-                      {d}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              className="btn-brutal px-6 py-2.5 bg-[#ff8a1e] text-[#111111] font-heading text-lg tracking-wider uppercase border-3 border-[#111111] shadow-brutal flex items-center justify-center gap-2 cursor-pointer hover:bg-[#ff9933]"
+          {/* Form đổi email (chỉ mở khi người dùng muốn đổi email) */}
+          {isChangingEmail && (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (inputEmail.trim()) {
+                  switchEmail(inputEmail);
+                }
+              }}
+              className="pt-2 border-t-2 border-[#111111] flex flex-col sm:flex-row items-stretch gap-2.5 animate-in fade-in"
             >
-              <span>ĐỌC THƯ NGAY</span>
-              <ArrowRight className="w-5 h-5 stroke-[3]" />
-            </button>
-
-            <button
-              type="button"
-              onClick={handleRandomize}
-              className="btn-brutal px-4 py-2.5 bg-[#ffc900] text-[#111111] font-heading text-lg tracking-wider uppercase border-3 border-[#111111] shadow-brutal flex items-center justify-center gap-1.5 cursor-pointer hover:bg-[#ffd633]"
-              title="Sinh ngẫu nhiên hòm thư mới"
-            >
-              <Dices className="w-5 h-5 stroke-[2.5]" />
-              <span className="hidden lg:inline">RANDOM</span>
-            </button>
-          </form>
-
-          {/* DẢI STICKER HÒM THƯ THEO DÕI */}
-          {recentEmails.length > 0 && (
-            <div className="pt-2 flex flex-wrap items-center gap-2 text-xs">
-              <span className="font-heading uppercase tracking-wider text-xs px-2 py-1 bg-[#0b0b2b] text-white border-2 border-[#111111]">
-                DISC_LABELS:
-              </span>
-              {recentEmails.map((email) => {
-                const isActive = activeEmail === email;
-                return (
-                  <div
-                    key={email}
-                    onClick={() => {
-                      setActiveEmail(email);
-                      setSelectedMessage(null);
-                    }}
-                    className={`btn-brutal flex items-center gap-2 px-3 py-1 border-2 border-[#111111] cursor-pointer font-bold uppercase tracking-wider text-xs transition-all ${
-                      isActive
-                        ? 'bg-[#ffc900] text-[#111111] shadow-brutal-sm -translate-y-0.5'
-                        : 'bg-white text-slate-800 hover:bg-slate-100 shadow-2xs'
-                    }`}
+              <div className="flex-1 flex border-3 border-[#111111] bg-white overflow-hidden shadow-brutal-sm focus-within:shadow-brutal-orange transition-all">
+                <div className="px-3 bg-[#0b0b2b] text-[#33ff66] flex items-center font-mono font-bold text-sm">
+                  $
+                </div>
+                <input
+                  type="text"
+                  placeholder="Nhập tiền tố hoặc email mới cần chuyển sang..."
+                  value={inputEmail}
+                  onChange={(e) => setInputEmail(e.target.value)}
+                  className="flex-1 px-3.5 py-2 text-sm md:text-base font-bold bg-white text-[#111111] outline-none placeholder-slate-400 font-tech"
+                  autoFocus
+                />
+                <div className="flex items-center px-3 bg-[#b9b8f2] border-l-3 border-[#111111]">
+                  <span className="font-heading text-lg mr-1 text-[#111111]">@</span>
+                  <select
+                    value={selectedDomain}
+                    onChange={(e) => setSelectedDomain(e.target.value)}
+                    className="bg-transparent text-sm font-bold text-[#111111] outline-none cursor-pointer uppercase font-tech"
                   >
-                    <span>{email}</span>
-                    <button
-                      type="button"
-                      onClick={(e) => removeRecent(e, email)}
-                      className="hover:text-[#e63b2e] p-0.5"
-                      title="Gỡ nhãn này"
-                    >
-                      <X className="w-3.5 h-3.5 stroke-[3]" />
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+                    {DOMAINS.map((d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
 
-          {/* BANNER BÁO CÁO HÒM THƯ VỪA NHẬN MAIL TRÊN HỆ THỐNG */}
-          {activeInboxes.length > 0 && (
-            <div className="p-2.5 bg-[#ffc900] border-3 border-[#111111] shadow-brutal-sm flex flex-wrap items-center justify-between gap-2 text-xs">
-              <div className="flex items-center gap-2 font-bold uppercase tracking-wider text-[#111111]">
-                <Zap className="w-4 h-4 fill-[#111111]" />
-                <span>PHÁT HIỆN THƯ MỚI TRÊN HỆ THỐNG:</span>
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                {activeInboxes.map((inbox) => (
-                  <button
-                    key={inbox.email}
-                    type="button"
-                    onClick={() => {
-                      setActiveEmail(inbox.email);
-                      setSelectedMessage(null);
-                    }}
-                    className={`btn-brutal px-3 py-1 border-2 border-[#111111] font-bold text-xs uppercase transition-all flex items-center gap-1.5 ${
-                      activeEmail === inbox.email
-                        ? 'bg-[#e63b2e] text-white shadow-brutal-sm'
-                        : 'bg-white text-[#111111] hover:bg-slate-100'
-                    }`}
-                  >
-                    <span>{inbox.email}</span>
-                    <span className="px-1.5 py-0.2 bg-[#0b0b2b] text-[#33ff66] font-mono text-[10px]">
-                      {inbox.count} THƯ
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
+              <button
+                type="submit"
+                className="btn-brutal px-6 py-2 bg-[#ff8a1e] text-[#111111] font-heading text-base tracking-wider uppercase border-3 border-[#111111] shadow-brutal flex items-center justify-center gap-1.5 cursor-pointer hover:bg-[#ff9933]"
+              >
+                <span>CHUYỂN HÒM THƯ</span>
+                <ArrowRight className="w-4 h-4 stroke-[3]" />
+              </button>
+
+              <button
+                type="button"
+                onClick={handleRandomize}
+                className="btn-brutal px-4 py-2 bg-[#ffc900] text-[#111111] font-heading text-base tracking-wider uppercase border-3 border-[#111111] shadow-brutal flex items-center justify-center gap-1 cursor-pointer hover:bg-[#ffd633]"
+                title="Tạo ngẫu nhiên một email mới"
+              >
+                <Dices className="w-4 h-4 stroke-[2.5]" />
+                <span>RANDOM</span>
+              </button>
+            </form>
           )}
         </div>
       </section>
 
-      {/* 3. BỐ CỤC SPLIT-VIEW CHUẨN CỬA SỔ RETRO TECH: DISC-01 vs DISC-02 */}
+      {/* 3. BỐ CỤC 2 CỘT TẬP TRUNG 100% VÀO EMAIL DUY NHẤT: DISC-01 vs DISC-02 */}
       <main className="max-w-7xl mx-auto w-full px-4 md:px-6 pb-8 flex-1 grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {/* CỘT TRÁI (Lg: 5 Cột): CỬA SỔ HỘP THƯ DISC-01 */}
+        {/* CỘT TRÁI (Lg: 5 Cột): HỘP THƯ ĐẾN CỦA DUY NHẤT EMAIL NÀY */}
         <div className="lg:col-span-5 bg-white border-4 border-[#111111] shadow-brutal flex flex-col h-[650px]">
           {/* Window Title Bar */}
           <div className="bg-[#b9b8f2] border-b-4 border-[#111111] px-4 py-2.5 flex items-center justify-between select-none">
@@ -462,74 +370,58 @@ export default function App() {
               </span>
             </div>
             <div className="flex items-center gap-1.5 text-xs font-mono font-bold">
-              <span className="w-3.5 h-3.5 rounded-none bg-[#e63b2e] border-2 border-[#111111] inline-block" />
-              <span className="w-3.5 h-3.5 rounded-none bg-[#ffc900] border-2 border-[#111111] inline-block" />
-              <span className="w-3.5 h-3.5 rounded-none bg-[#33ff66] border-2 border-[#111111] inline-block" />
+              <span className="w-3.5 h-3.5 bg-[#e63b2e] border-2 border-[#111111] inline-block" />
+              <span className="w-3.5 h-3.5 bg-[#ffc900] border-2 border-[#111111] inline-block" />
+              <span className="w-3.5 h-3.5 bg-[#33ff66] border-2 border-[#111111] inline-block" />
             </div>
           </div>
 
           {/* Sub Toolbar */}
           <div className="p-3 border-b-3 border-[#111111] bg-slate-50 space-y-2.5">
             <div className="flex items-center justify-between gap-2">
-              <div className="min-w-0">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
-                  ACTIVE_INBOX:
-                </span>
-                <div className="flex items-center gap-1.5 font-bold text-sm truncate max-w-[200px]">
-                  <span className="truncate">{activeEmail || 'CHƯA CHỌN'}</span>
-                  {activeEmail && (
-                    <button
-                      type="button"
-                      onClick={handleCopyActiveEmail}
-                      className="p-1 hover:text-[#ff8a1e]"
-                      title="Sao chép email này"
-                    >
-                      {copiedEmail ? <Check className="w-4 h-4 text-emerald-600 stroke-[3]" /> : <Copy className="w-4 h-4 stroke-[2.5]" />}
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Action Buttons */}
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
                   onClick={() => fetchMessages(activeEmail)}
                   disabled={loadingMessages || !activeEmail}
-                  className="btn-brutal p-1.5 bg-white border-2 border-[#111111] shadow-brutal-sm hover:bg-[#ffc900] cursor-pointer"
-                  title="Làm mới"
+                  className="btn-brutal px-3 py-1 bg-white border-2 border-[#111111] shadow-brutal-sm font-heading text-xs tracking-wider uppercase hover:bg-[#ffc900] cursor-pointer flex items-center gap-1.5"
+                  title="Làm mới hộp thư"
                 >
-                  <RefreshCw className={`w-4 h-4 stroke-[2.5] ${loadingMessages ? 'animate-spin' : ''}`} />
+                  <RefreshCw className={`w-3.5 h-3.5 stroke-[2.5] ${loadingMessages ? 'animate-spin' : ''}`} />
+                  <span>LÀM MỚI</span>
                 </button>
+
                 <button
                   type="button"
                   onClick={clearCurrentInbox}
                   disabled={messages.length === 0}
-                  className="btn-brutal p-1.5 bg-[#e63b2e] text-white border-2 border-[#111111] shadow-brutal-sm hover:bg-red-700 cursor-pointer disabled:opacity-30"
+                  className="btn-brutal px-2.5 py-1 bg-[#e63b2e] text-white border-2 border-[#111111] shadow-brutal-sm font-heading text-xs uppercase hover:bg-red-700 cursor-pointer disabled:opacity-30 flex items-center gap-1"
                   title="Xóa toàn bộ thư"
                 >
-                  <Trash2 className="w-4 h-4 stroke-[2.5]" />
+                  <Trash2 className="w-3.5 h-3.5 stroke-[2.5]" />
+                  <span>DỌN SẠCH</span>
                 </button>
+              </div>
+
+              <div className="flex items-center gap-2 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setAutoRefresh(!autoRefresh)}
+                  className={`btn-brutal px-2 py-1 border-2 border-[#111111] font-bold uppercase text-[10px] flex items-center gap-1.5 cursor-pointer ${
+                    autoRefresh ? 'bg-[#33ff66] text-[#111111] shadow-brutal-sm' : 'bg-slate-200 text-slate-500'
+                  }`}
+                >
+                  <span className={`w-2 h-2 ${autoRefresh ? 'bg-[#111111] animate-ping' : 'bg-slate-400'}`} />
+                  <span>AUTO: {autoRefresh ? `${countdown}S` : 'OFF'}</span>
+                </button>
+
+                <span className="font-mono font-bold text-xs bg-[#0b0b2b] text-white px-2 py-0.5 border border-[#111111]">
+                  {filteredMessages.length} THƯ
+                </span>
               </div>
             </div>
 
-            {/* Auto refresh & Search */}
-            <div className="flex items-center justify-between gap-2 text-xs pt-1">
-              <button
-                type="button"
-                onClick={() => setAutoRefresh(!autoRefresh)}
-                className={`btn-brutal px-2.5 py-1 border-2 border-[#111111] font-bold uppercase text-[11px] flex items-center gap-1.5 cursor-pointer ${
-                  autoRefresh ? 'bg-[#33ff66] text-[#111111] shadow-brutal-sm' : 'bg-slate-200 text-slate-500'
-                }`}
-              >
-                <span className={`w-2 h-2 ${autoRefresh ? 'bg-[#111111] animate-ping' : 'bg-slate-400'}`} />
-                <span>POLL: {autoRefresh ? `${countdown}S` : 'OFF'}</span>
-              </button>
-              <span className="font-mono font-bold text-xs bg-[#0b0b2b] text-white px-2 py-0.5 border border-[#111111]">
-                {filteredMessages.length} PACKETS
-              </span>
-            </div>
-
+            {/* Tìm kiếm */}
             <div className="relative">
               <Search className="w-4 h-4 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
               <input
@@ -542,7 +434,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* Danh sách Message Cards */}
+          {/* Danh sách các lá thư */}
           <div className="flex-1 overflow-y-auto p-3 space-y-2.5 bg-[#f8fafc]">
             {loadingMessages && messages.length === 0 ? (
               <div className="p-8 text-center font-bold text-xs uppercase space-y-2 text-slate-600">
@@ -554,7 +446,7 @@ export default function App() {
                 <Inbox className="w-10 h-10 mx-auto opacity-40 stroke-[2]" />
                 <p className="font-heading text-base uppercase text-[#111111]">HÒM THƯ TRỐNG</p>
                 <p className="text-xs text-slate-500 font-bold max-w-xs mx-auto">
-                  Chưa có email nào gửi tới địa chỉ này. Khi có thư mới, nó sẽ tự xuất hiện ngay tại đây!
+                  Chưa có email nào gửi tới {activeEmail}. Khi có thư mới, nó sẽ tự xuất hiện ngay tại đây!
                 </p>
               </div>
             ) : (
@@ -608,7 +500,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* CỘT PHẢI (Lg: 7 Cột): CỬA SỔ VIEWER & TERMINAL OTP DISC-02 */}
+        {/* CỘT PHẢI (Lg: 7 Cột): NỘI DUNG THƯ & MÀN HÌNH TERMINAL OTP */}
         <div className="lg:col-span-7 bg-white border-4 border-[#111111] shadow-brutal flex flex-col h-[650px]">
           {/* Window Title Bar */}
           <div className="bg-[#0b0b2b] text-white border-b-4 border-[#111111] px-4 py-2.5 flex items-center justify-between select-none">
@@ -674,7 +566,7 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* 4. CỤM TERMINAL OTP TO RÕ - ĐIỂM NHẤN Y2K CHÍNH */}
+                {/* CỤM TERMINAL OTP TO RÕ */}
                 {currentOtp && (
                   <div className="border-4 border-[#111111] shadow-brutal bg-[#0b0b2b] p-4 text-[#33ff66] space-y-3 animate-in fade-in">
                     <div className="flex items-center justify-between border-b-2 border-dashed border-[#33ff66]/40 pb-2">
@@ -738,7 +630,7 @@ export default function App() {
                   </div>
                 )}
 
-                {/* Folder Tabs chuyển chế độ xem */}
+                {/* Tabs chuyển chế độ xem */}
                 <div className="flex items-center justify-between pt-1 border-t-2 border-[#111111] text-xs">
                   <div className="flex gap-2">
                     <button
@@ -784,15 +676,15 @@ export default function App() {
         </div>
       </main>
 
-      {/* FOOTER RETRO Y2K */}
+      {/* FOOTER RETRO */}
       <footer className="bg-[#0b0b2b] border-t-4 border-[#111111] text-white py-3 px-4 text-xs font-mono">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <span className="text-[#33ff66]">●</span>
-            <span>MAIL247 RETRO-TECH v2.0 // NEO-BRUTALISM ENGINE</span>
+            <span>MAIL247 // SINGLE_INBOX_CONSOLE</span>
           </div>
           <div className="text-slate-400">
-            CLOUDFLARE_EMAIL_ROUTING + D1_SQLITE
+            FOCUSED MODE: 1 EMAIL AT A TIME
           </div>
         </div>
       </footer>
