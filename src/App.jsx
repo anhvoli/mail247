@@ -17,7 +17,9 @@ import {
   ArrowRight,
   ShieldCheck,
   Dices,
-  Bell
+  Terminal,
+  Zap,
+  Radio
 } from 'lucide-react';
 import DOMPurify from 'dompurify';
 
@@ -85,14 +87,13 @@ export default function App() {
     localStorage.setItem('mail247_recents', JSON.stringify(recentEmails));
   }, [recentEmails]);
 
-  // Tự động quét các hòm thư vừa có thư mới trên hệ thống
+  // Quét các hòm thư vừa có thư trên hệ thống
   const checkActiveInboxes = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/api/active-inboxes`);
       const json = await res.json();
       if (json.success && json.data?.length > 0) {
         setActiveInboxes(json.data);
-        // Tự động đẩy các hòm thư có thư vào danh sách gần đây
         setRecentEmails((prev) => {
           const incoming = json.data.map((d) => d.email);
           return Array.from(new Set([...incoming, ...prev]));
@@ -107,7 +108,7 @@ export default function App() {
     checkActiveInboxes();
   }, [checkActiveInboxes]);
 
-  // Thêm một email vào danh sách theo dõi
+  // Chọn hoặc thêm một email vào danh sách theo dõi
   const openEmail = useCallback((target) => {
     let email = target.trim().toLowerCase();
     if (!email) return;
@@ -137,15 +138,15 @@ export default function App() {
     }
   };
 
-  // Tạo email ngẫu nhiên để đọc ngay
+  // Tạo email ngẫu nhiên
   const handleRandomize = () => {
-    const prefixes = ['test', 'dev', 'order', 'vip', 'user', 'fast', 'acc'];
+    const prefixes = ['alpha', 'delta', 'neo', 'cyber', 'disc', 'user', 'zero'];
     const rand = `${prefixes[Math.floor(Math.random() * prefixes.length)]}_${Math.floor(1000 + Math.random() * 9000)}`;
     const full = `${rand}@${selectedDomain}`;
     openEmail(full);
   };
 
-  // Lấy danh sách thư của email đang chọn
+  // Lấy danh sách thư
   const fetchMessages = useCallback(async (email) => {
     if (!email) return;
     setLoadingMessages(true);
@@ -156,13 +157,13 @@ export default function App() {
         setMessages(json.data || []);
       }
     } catch (err) {
-      console.error('Lỗi khi tải hộp thư:', err);
+      console.error('Lỗi tải hộp thư:', err);
     } finally {
       setLoadingMessages(false);
     }
   }, []);
 
-  // Đọc chi tiết nội dung thư
+  // Đọc chi tiết thư
   const fetchDetail = async (id) => {
     if (!id) return;
     setLoadingDetail(true);
@@ -171,14 +172,13 @@ export default function App() {
       const json = await res.json();
       if (json.success) {
         setSelectedMessage(json.data);
-        // Đánh dấu đã đọc
         fetch(`${API_BASE}/api/message/${id}/read`, { method: 'PATCH' }).catch(() => {});
         setMessages((prev) =>
           prev.map((m) => (m.id === id ? { ...m, is_read: 1 } : m))
         );
       }
     } catch (err) {
-      console.error('Lỗi khi tải chi tiết thư:', err);
+      console.error('Lỗi chi tiết thư:', err);
     } finally {
       setLoadingDetail(false);
     }
@@ -186,7 +186,7 @@ export default function App() {
 
   // Xóa một thư
   const deleteOneMessage = async (id) => {
-    if (!id || !window.confirm('Bạn có chắc chắn muốn xóa thư này?')) return;
+    if (!id || !window.confirm('BẠN CÓ CHẮC MUỐN XÓA THƯ NÀY?')) return;
     try {
       await fetch(`${API_BASE}/api/message/${id}`, { method: 'DELETE' });
       setMessages((prev) => prev.filter((m) => m.id !== id));
@@ -201,7 +201,7 @@ export default function App() {
   // Xóa toàn bộ hòm thư
   const clearCurrentInbox = async () => {
     if (!activeEmail || messages.length === 0) return;
-    if (!window.confirm(`Xóa toàn bộ thư trong hòm thư ${activeEmail}?`)) return;
+    if (!window.confirm(`XÓA TẤT CẢ THƯ TRONG HÒM THƯ ${activeEmail}?`)) return;
     try {
       await fetch(`${API_BASE}/api/inbox?email=${encodeURIComponent(activeEmail)}`, { method: 'DELETE' });
       setMessages([]);
@@ -211,7 +211,6 @@ export default function App() {
     }
   };
 
-  // Tải thư ngay khi đổi activeEmail
   useEffect(() => {
     if (activeEmail) {
       fetchMessages(activeEmail);
@@ -222,7 +221,6 @@ export default function App() {
     }
   }, [activeEmail, fetchMessages]);
 
-  // Bộ đếm làm mới tự động (Auto-refresh mỗi 5s)
   useEffect(() => {
     if (!autoRefresh || !activeEmail) return;
     const timer = setInterval(() => {
@@ -278,27 +276,54 @@ export default function App() {
   });
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-100 font-['Inter',sans-serif]">
-      {/* TOP HEADER: NHẬP VÀ CHỌN MAIL ĐỌC NGAY */}
-      <header className="bg-white border-b border-slate-200 px-4 md:px-6 py-3 sticky top-0 z-20 shadow-xs">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          {/* Logo */}
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-indigo-600/20">
-              <Mail className="w-5 h-5" />
+    <div className="min-h-screen flex flex-col bg-[#b9b8f2] text-[#111111] font-tech selection:bg-[#ff8a1e] selection:text-[#111111]">
+      {/* 1. HEADER CHUẨN NEO-BRUTALISM Y2K: NỀN NAVY + HOẠ TIẾT CHẤM HALFTONE */}
+      <header className="dot-pattern border-b-4 border-[#111111] px-4 md:px-6 py-3.5 sticky top-0 z-30 shadow-brutal">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+          {/* Logo Tag Sticker */}
+          <div className="flex items-center gap-3">
+            <div className="bg-[#e63b2e] text-white px-3.5 py-1 border-3 border-[#111111] shadow-brutal-sm font-heading text-xl tracking-wider uppercase transform -rotate-1">
+              MAIL247 // DISC-01
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-slate-900 text-lg tracking-tight">Mail247</span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800">
-                  Live
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-400">Đọc hòm thư & lấy mã OTP tức thì</p>
+            <div className="hidden sm:block">
+              <span className="text-white font-heading text-lg tracking-wide uppercase stroke-title">
+                RETRO-TECH OTP CONSOLE
+              </span>
             </div>
           </div>
 
-          {/* Ô Nhập Email Cần Đọc */}
+          {/* System status stickers */}
+          <div className="flex items-center gap-2">
+            <div className="bg-[#ffc900] text-[#111111] px-2.5 py-1 border-2 border-[#111111] shadow-brutal-sm text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-none bg-[#33ff66] border border-[#111111] animate-ping" />
+              <span>SYS: ONLINE</span>
+            </div>
+            <div className="bg-white text-[#111111] px-2.5 py-1 border-2 border-[#111111] shadow-brutal-sm text-xs font-bold uppercase tracking-wider hidden md:block">
+              0 Đ PHÍ DUY TRÌ
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* 2. KHU VỰC ĐIỀU KHIỂN & COMMAND BAR */}
+      <section className="max-w-7xl mx-auto w-full px-4 md:px-6 pt-5 pb-3">
+        {/* Khung Command Bar */}
+        <div className="bg-white border-4 border-[#111111] shadow-brutal p-4 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-[#111111] pb-2">
+            <div className="flex items-center gap-2">
+              <span className="bg-[#0b0b2b] text-[#33ff66] px-2 py-0.5 text-xs font-mono font-bold border border-[#111111]">
+                TERMINAL_INPUT:
+              </span>
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                NHẬP HÒM THƯ CẦN ĐỌC HOẶC TẠO MỚI
+              </span>
+            </div>
+            <div className="text-xs font-mono text-slate-500 font-bold">
+              [PROTO: CLOUDFLARE_D1]
+            </div>
+          </div>
+
+          {/* Input & CTA Button */}
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -307,22 +332,25 @@ export default function App() {
                 setInputEmail('');
               }
             }}
-            className="flex-1 max-w-xl flex items-center gap-1.5"
+            className="flex flex-col sm:flex-row items-stretch gap-2.5"
           >
-            <div className="relative flex-1 flex rounded-xl border border-slate-300 bg-slate-50 focus-within:bg-white focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-indigo-500 transition-all overflow-hidden shadow-2xs">
+            <div className="flex-1 flex border-3 border-[#111111] bg-white overflow-hidden shadow-brutal-sm focus-within:shadow-brutal-orange transition-all">
+              <div className="px-3 bg-[#0b0b2b] text-[#33ff66] flex items-center font-mono font-bold text-sm">
+                $
+              </div>
               <input
                 type="text"
-                placeholder="Nhập tên mail (ví dụ: yenbeo hoặc yenbeo@qoder.io.vn)..."
+                placeholder="Nhập tên hòm thư (ví dụ: yenbeo, admin, order01)..."
                 value={inputEmail}
                 onChange={(e) => setInputEmail(e.target.value)}
-                className="flex-1 px-3.5 py-2 text-xs md:text-sm bg-transparent outline-none font-medium text-slate-800 placeholder-slate-400"
+                className="flex-1 px-3.5 py-2.5 text-sm md:text-base font-bold bg-white text-[#111111] outline-none placeholder-slate-400 font-tech"
               />
-              <div className="flex items-center px-2.5 bg-slate-100/70 border-l border-slate-200">
-                <span className="text-slate-400 text-xs font-bold mr-0.5">@</span>
+              <div className="flex items-center px-3 bg-[#b9b8f2] border-l-3 border-[#111111]">
+                <span className="font-heading text-lg mr-1 text-[#111111]">@</span>
                 <select
                   value={selectedDomain}
                   onChange={(e) => setSelectedDomain(e.target.value)}
-                  className="bg-transparent text-xs font-bold text-slate-700 outline-none cursor-pointer"
+                  className="bg-transparent text-sm font-bold text-[#111111] outline-none cursor-pointer uppercase font-tech"
                 >
                   {DOMAINS.map((d) => (
                     <option key={d} value={d}>
@@ -335,30 +363,29 @@ export default function App() {
 
             <button
               type="submit"
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-xs md:text-sm font-semibold rounded-xl shadow-sm shadow-indigo-600/30 flex items-center gap-1.5 transition-all whitespace-nowrap"
+              className="btn-brutal px-6 py-2.5 bg-[#ff8a1e] text-[#111111] font-heading text-lg tracking-wider uppercase border-3 border-[#111111] shadow-brutal flex items-center justify-center gap-2 cursor-pointer hover:bg-[#ff9933]"
             >
-              <span>Đọc Thư</span>
-              <ArrowRight className="w-3.5 h-3.5" />
+              <span>ĐỌC THƯ NGAY</span>
+              <ArrowRight className="w-5 h-5 stroke-[3]" />
             </button>
 
             <button
               type="button"
               onClick={handleRandomize}
-              className="p-2.5 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-600 rounded-xl transition-all"
-              title="Sinh ngẫu nhiên một email để đọc ngay"
+              className="btn-brutal px-4 py-2.5 bg-[#ffc900] text-[#111111] font-heading text-lg tracking-wider uppercase border-3 border-[#111111] shadow-brutal flex items-center justify-center gap-1.5 cursor-pointer hover:bg-[#ffd633]"
+              title="Sinh ngẫu nhiên hòm thư mới"
             >
-              <Dices className="w-4 h-4 text-indigo-600" />
+              <Dices className="w-5 h-5 stroke-[2.5]" />
+              <span className="hidden lg:inline">RANDOM</span>
             </button>
           </form>
-        </div>
 
-        {/* DANH SÁCH CÁC HÒM THƯ GẦN ĐÂY */}
-        {recentEmails.length > 0 && (
-          <div className="flex items-center gap-2 overflow-x-auto pt-2.5 scrollbar-none text-xs">
-            <span className="text-slate-400 text-[11px] font-semibold flex-shrink-0">
-              Hòm thư đang theo dõi:
-            </span>
-            <div className="flex items-center gap-1.5 flex-nowrap">
+          {/* DẢI STICKER HÒM THƯ THEO DÕI */}
+          {recentEmails.length > 0 && (
+            <div className="pt-2 flex flex-wrap items-center gap-2 text-xs">
+              <span className="font-heading uppercase tracking-wider text-xs px-2 py-1 bg-[#0b0b2b] text-white border-2 border-[#111111]">
+                DISC_LABELS:
+              </span>
               {recentEmails.map((email) => {
                 const isActive = activeEmail === email;
                 return (
@@ -368,153 +395,166 @@ export default function App() {
                       setActiveEmail(email);
                       setSelectedMessage(null);
                     }}
-                    className={`flex items-center gap-1.5 px-3 py-1 rounded-full cursor-pointer text-xs font-semibold transition-all flex-shrink-0 ${
+                    className={`btn-brutal flex items-center gap-2 px-3 py-1 border-2 border-[#111111] cursor-pointer font-bold uppercase tracking-wider text-xs transition-all ${
                       isActive
-                        ? 'bg-indigo-600 text-white shadow-xs shadow-indigo-600/30 ring-2 ring-indigo-300'
-                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                        ? 'bg-[#ffc900] text-[#111111] shadow-brutal-sm -translate-y-0.5'
+                        : 'bg-white text-slate-800 hover:bg-slate-100 shadow-2xs'
                     }`}
                   >
-                    <span className="max-w-[170px] truncate">{email}</span>
+                    <span>{email}</span>
                     <button
                       type="button"
                       onClick={(e) => removeRecent(e, email)}
-                      className={`p-0.5 rounded-full transition-colors ${
-                        isActive ? 'hover:bg-indigo-700 text-white/80' : 'hover:bg-slate-300 text-slate-400'
-                      }`}
-                      title="Bỏ theo dõi email này"
+                      className="hover:text-[#e63b2e] p-0.5"
+                      title="Gỡ nhãn này"
                     >
-                      <X className="w-3 h-3" />
+                      <X className="w-3.5 h-3.5 stroke-[3]" />
                     </button>
                   </div>
                 );
               })}
             </div>
-          </div>
-        )}
+          )}
 
-        {/* THÔNG BÁO HÒM THƯ VỪA CÓ THƯ MỚI TRÊN HỆ THỐNG */}
-        {activeInboxes.length > 0 && (
-          <div className="mt-2.5 px-3 py-1.5 bg-indigo-50/80 rounded-lg border border-indigo-100 flex items-center justify-between text-xs flex-wrap gap-2">
-            <div className="flex items-center gap-1.5 text-indigo-900 font-medium">
-              <Sparkles className="w-3.5 h-3.5 text-indigo-600 flex-shrink-0" />
-              <span>Hòm thư vừa nhận email mới trên hệ thống:</span>
+          {/* BANNER BÁO CÁO HÒM THƯ VỪA NHẬN MAIL TRÊN HỆ THỐNG */}
+          {activeInboxes.length > 0 && (
+            <div className="p-2.5 bg-[#ffc900] border-3 border-[#111111] shadow-brutal-sm flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-2 font-bold uppercase tracking-wider text-[#111111]">
+                <Zap className="w-4 h-4 fill-[#111111]" />
+                <span>PHÁT HIỆN THƯ MỚI TRÊN HỆ THỐNG:</span>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                {activeInboxes.map((inbox) => (
+                  <button
+                    key={inbox.email}
+                    type="button"
+                    onClick={() => {
+                      setActiveEmail(inbox.email);
+                      setSelectedMessage(null);
+                    }}
+                    className={`btn-brutal px-3 py-1 border-2 border-[#111111] font-bold text-xs uppercase transition-all flex items-center gap-1.5 ${
+                      activeEmail === inbox.email
+                        ? 'bg-[#e63b2e] text-white shadow-brutal-sm'
+                        : 'bg-white text-[#111111] hover:bg-slate-100'
+                    }`}
+                  >
+                    <span>{inbox.email}</span>
+                    <span className="px-1.5 py-0.2 bg-[#0b0b2b] text-[#33ff66] font-mono text-[10px]">
+                      {inbox.count} THƯ
+                    </span>
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {activeInboxes.map((inbox) => (
-                <button
-                  key={inbox.email}
-                  type="button"
-                  onClick={() => {
-                    setActiveEmail(inbox.email);
-                    setSelectedMessage(null);
-                  }}
-                  className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border transition-all flex items-center gap-1 ${
-                    activeEmail === inbox.email
-                      ? 'bg-indigo-600 text-white border-indigo-600'
-                      : 'bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-100'
-                  }`}
-                >
-                  <span>{inbox.email}</span>
-                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-400 text-amber-950">
-                    {inbox.count} thư
-                  </span>
-                </button>
-              ))}
+          )}
+        </div>
+      </section>
+
+      {/* 3. BỐ CỤC SPLIT-VIEW CHUẨN CỬA SỔ RETRO TECH: DISC-01 vs DISC-02 */}
+      <main className="max-w-7xl mx-auto w-full px-4 md:px-6 pb-8 flex-1 grid grid-cols-1 lg:grid-cols-12 gap-5">
+        {/* CỘT TRÁI (Lg: 5 Cột): CỬA SỔ HỘP THƯ DISC-01 */}
+        <div className="lg:col-span-5 bg-white border-4 border-[#111111] shadow-brutal flex flex-col h-[650px]">
+          {/* Window Title Bar */}
+          <div className="bg-[#b9b8f2] border-b-4 border-[#111111] px-4 py-2.5 flex items-center justify-between select-none">
+            <div className="flex items-center gap-2">
+              <span className="font-heading tracking-wide uppercase text-base text-[#111111]">
+                DISC-01 — INBOX_STREAM
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 text-xs font-mono font-bold">
+              <span className="w-3.5 h-3.5 rounded-none bg-[#e63b2e] border-2 border-[#111111] inline-block" />
+              <span className="w-3.5 h-3.5 rounded-none bg-[#ffc900] border-2 border-[#111111] inline-block" />
+              <span className="w-3.5 h-3.5 rounded-none bg-[#33ff66] border-2 border-[#111111] inline-block" />
             </div>
           </div>
-        )}
-      </header>
 
-      {/* THÂN CHÍNH: 2 CỘT (DANH SÁCH THƯ VÀ NỘI DUNG CHI TIẾT) */}
-      <main className="flex-1 flex overflow-hidden h-[calc(100vh-7.5rem)]">
-        {/* CỘT TRÁI: HỘP THƯ ĐẾN (INBOX) */}
-        <aside className="w-80 md:w-96 bg-white border-r border-slate-200 flex flex-col flex-shrink-0 h-full select-none">
-          {/* Header hộp thư */}
-          <div className="p-3.5 border-b border-slate-100 bg-slate-50/70 space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="min-w-0 pr-2">
-                <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider block">
-                  Đang xem
+          {/* Sub Toolbar */}
+          <div className="p-3 border-b-3 border-[#111111] bg-slate-50 space-y-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                  ACTIVE_INBOX:
                 </span>
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  <span className="text-xs font-bold text-slate-900 truncate max-w-[200px]" title={activeEmail}>
-                    {activeEmail || 'Chưa chọn'}
-                  </span>
+                <div className="flex items-center gap-1.5 font-bold text-sm truncate max-w-[200px]">
+                  <span className="truncate">{activeEmail || 'CHƯA CHỌN'}</span>
                   {activeEmail && (
                     <button
                       type="button"
                       onClick={handleCopyActiveEmail}
-                      className="p-1 text-slate-400 hover:text-indigo-600 rounded transition-colors"
-                      title="Sao chép địa chỉ email này"
+                      className="p-1 hover:text-[#ff8a1e]"
+                      title="Sao chép email này"
                     >
-                      {copiedEmail ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                      {copiedEmail ? <Check className="w-4 h-4 text-emerald-600 stroke-[3]" /> : <Copy className="w-4 h-4 stroke-[2.5]" />}
                     </button>
                   )}
                 </div>
               </div>
 
-              <div className="flex items-center gap-1">
+              {/* Action Buttons */}
+              <div className="flex items-center gap-1.5">
                 <button
                   type="button"
                   onClick={() => fetchMessages(activeEmail)}
                   disabled={loadingMessages || !activeEmail}
-                  className="p-1.5 rounded-lg text-slate-600 hover:text-indigo-600 hover:bg-white border border-slate-200 shadow-2xs transition-all active:scale-95"
-                  title="Làm mới hộp thư"
+                  className="btn-brutal p-1.5 bg-white border-2 border-[#111111] shadow-brutal-sm hover:bg-[#ffc900] cursor-pointer"
+                  title="Làm mới"
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 ${loadingMessages ? 'animate-spin text-indigo-600' : ''}`} />
+                  <RefreshCw className={`w-4 h-4 stroke-[2.5] ${loadingMessages ? 'animate-spin' : ''}`} />
                 </button>
                 <button
                   type="button"
                   onClick={clearCurrentInbox}
                   disabled={messages.length === 0}
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 shadow-2xs transition-all disabled:opacity-30"
+                  className="btn-brutal p-1.5 bg-[#e63b2e] text-white border-2 border-[#111111] shadow-brutal-sm hover:bg-red-700 cursor-pointer disabled:opacity-30"
                   title="Xóa toàn bộ thư"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
+                  <Trash2 className="w-4 h-4 stroke-[2.5]" />
                 </button>
               </div>
             </div>
 
-            {/* Auto refresh status & Tìm kiếm */}
-            <div className="flex items-center justify-between text-xs pt-0.5">
+            {/* Auto refresh & Search */}
+            <div className="flex items-center justify-between gap-2 text-xs pt-1">
               <button
                 type="button"
                 onClick={() => setAutoRefresh(!autoRefresh)}
-                className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium transition-colors ${
-                  autoRefresh ? 'bg-indigo-100/70 text-indigo-700' : 'bg-slate-200 text-slate-500'
+                className={`btn-brutal px-2.5 py-1 border-2 border-[#111111] font-bold uppercase text-[11px] flex items-center gap-1.5 cursor-pointer ${
+                  autoRefresh ? 'bg-[#33ff66] text-[#111111] shadow-brutal-sm' : 'bg-slate-200 text-slate-500'
                 }`}
               >
-                <span className={`w-1.5 h-1.5 rounded-full ${autoRefresh ? 'bg-indigo-600 animate-ping' : 'bg-slate-400'}`} />
-                <span>Auto: {autoRefresh ? `${countdown}s` : 'Tắt'}</span>
+                <span className={`w-2 h-2 ${autoRefresh ? 'bg-[#111111] animate-ping' : 'bg-slate-400'}`} />
+                <span>POLL: {autoRefresh ? `${countdown}S` : 'OFF'}</span>
               </button>
-              <span className="text-[11px] font-semibold text-slate-500">{filteredMessages.length} thư</span>
+              <span className="font-mono font-bold text-xs bg-[#0b0b2b] text-white px-2 py-0.5 border border-[#111111]">
+                {filteredMessages.length} PACKETS
+              </span>
             </div>
 
             <div className="relative">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Tìm người gửi, OTP..."
+                placeholder="Lọc thư, tìm mã OTP..."
                 value={searchFilter}
                 onChange={(e) => setSearchFilter(e.target.value)}
-                className="w-full pl-7 pr-3 py-1 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 font-medium"
+                className="w-full pl-8 pr-3 py-1.5 text-xs font-bold bg-white border-2 border-[#111111] shadow-2xs outline-none font-tech"
               />
             </div>
           </div>
 
-          {/* Danh sách các lá thư */}
-          <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
+          {/* Danh sách Message Cards */}
+          <div className="flex-1 overflow-y-auto p-3 space-y-2.5 bg-[#f8fafc]">
             {loadingMessages && messages.length === 0 ? (
-              <div className="p-8 text-center text-slate-400 space-y-2">
-                <RefreshCw className="w-6 h-6 mx-auto animate-spin text-indigo-500" />
-                <p className="text-xs">Đang kiểm tra thư mới...</p>
+              <div className="p-8 text-center font-bold text-xs uppercase space-y-2 text-slate-600">
+                <RefreshCw className="w-7 h-7 mx-auto animate-spin stroke-[2.5]" />
+                <p>ĐANG ĐỌC TỪ CLOUDFLARE D1...</p>
               </div>
             ) : filteredMessages.length === 0 ? (
-              <div className="p-8 text-center text-slate-400 space-y-2">
-                <Inbox className="w-8 h-8 mx-auto opacity-30 text-indigo-500" />
-                <p className="text-xs font-semibold text-slate-600">Hòm thư đang trống</p>
-                <p className="text-[11px] text-slate-400 max-w-[200px] mx-auto">
-                  Chưa có email nào gửi tới địa chỉ này. Thư mới sẽ tự nhảy vào đây!
+              <div className="p-8 text-center border-2 border-dashed border-[#111111] bg-white space-y-2">
+                <Inbox className="w-10 h-10 mx-auto opacity-40 stroke-[2]" />
+                <p className="font-heading text-base uppercase text-[#111111]">HÒM THƯ TRỐNG</p>
+                <p className="text-xs text-slate-500 font-bold max-w-xs mx-auto">
+                  Chưa có email nào gửi tới địa chỉ này. Khi có thư mới, nó sẽ tự xuất hiện ngay tại đây!
                 </p>
               </div>
             ) : (
@@ -525,35 +565,38 @@ export default function App() {
                   <div
                     key={msg.id}
                     onClick={() => fetchDetail(msg.id)}
-                    className={`p-3.5 cursor-pointer transition-all ${
+                    className={`btn-brutal p-3 border-3 border-[#111111] cursor-pointer transition-all ${
                       isSelected
-                        ? 'bg-indigo-50/80 border-l-4 border-l-indigo-600'
-                        : 'hover:bg-slate-50 border-l-4 border-l-transparent'
+                        ? 'bg-[#ffc900] shadow-brutal translate-x-1'
+                        : isUnread
+                        ? 'bg-white shadow-brutal hover:bg-amber-50'
+                        : 'bg-white shadow-brutal-sm hover:bg-slate-50'
                     }`}
                   >
                     <div className="flex items-center justify-between gap-1 mb-1">
                       <div className="flex items-center gap-1.5 min-w-0">
-                        {isUnread && <span className="w-2 h-2 rounded-full bg-indigo-600 flex-shrink-0" />}
-                        <span className={`text-xs truncate ${isUnread ? 'font-bold text-slate-900' : 'font-medium text-slate-700'}`}>
+                        {isUnread && (
+                          <span className="w-2.5 h-2.5 bg-[#e63b2e] border border-[#111111] flex-shrink-0" />
+                        )}
+                        <span className="text-xs font-bold uppercase truncate max-w-[190px]">
                           {msg.sender_name || msg.sender}
                         </span>
                       </div>
-                      <span className="text-[10px] text-slate-400 whitespace-nowrap">
+                      <span className="text-[10px] font-mono font-bold text-slate-500">
                         {msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                       </span>
                     </div>
 
-                    <div className={`text-xs truncate mb-1 ${isUnread ? 'font-semibold text-slate-800' : 'text-slate-600'}`}>
-                      {msg.subject || '(Không có tiêu đề)'}
+                    <div className="text-xs font-bold truncate mb-1 text-slate-900">
+                      {msg.subject || '(KHÔNG CÓ TIÊU ĐỀ)'}
                     </div>
 
-                    <div className="flex items-center justify-between gap-2 mt-1">
-                      <p className="text-[11px] text-slate-400 truncate line-clamp-1 flex-1">
+                    <div className="flex items-center justify-between gap-2 mt-2">
+                      <p className="text-[11px] text-slate-600 truncate line-clamp-1 font-medium flex-1">
                         {msg.snippet || 'Nhấp để xem nội dung...'}
                       </p>
                       {msg.otp_code && (
-                        <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-amber-100 text-amber-800 border border-amber-200 whitespace-nowrap">
-                          <KeyRound className="w-2.5 h-2.5" />
+                        <span className="px-2 py-0.5 bg-[#ff8a1e] text-[#111111] border-2 border-[#111111] font-mono text-[11px] font-extrabold shadow-2xs whitespace-nowrap">
                           OTP: {msg.otp_code}
                         </span>
                       )}
@@ -563,172 +606,196 @@ export default function App() {
               })
             )}
           </div>
-        </aside>
+        </div>
 
-        {/* CỘT PHẢI: CHI TIẾT THƯ & THẺ OTP TO RÕ */}
-        <section className="flex-1 bg-white flex flex-col h-full overflow-hidden">
+        {/* CỘT PHẢI (Lg: 7 Cột): CỬA SỔ VIEWER & TERMINAL OTP DISC-02 */}
+        <div className="lg:col-span-7 bg-white border-4 border-[#111111] shadow-brutal flex flex-col h-[650px]">
+          {/* Window Title Bar */}
+          <div className="bg-[#0b0b2b] text-white border-b-4 border-[#111111] px-4 py-2.5 flex items-center justify-between select-none">
+            <div className="flex items-center gap-2">
+              <Terminal className="w-4 h-4 text-[#33ff66]" />
+              <span className="font-heading tracking-wide uppercase text-base text-white">
+                DISC-02 — TERMINAL_VIEWER
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 text-xs font-mono font-bold">
+              <span className="w-3.5 h-3.5 bg-[#e63b2e] border-2 border-[#111111] inline-block" />
+              <span className="w-3.5 h-3.5 bg-[#ffc900] border-2 border-[#111111] inline-block" />
+              <span className="w-3.5 h-3.5 bg-[#33ff66] border-2 border-[#111111] inline-block" />
+            </div>
+          </div>
+
           {loadingDetail ? (
-            <div className="flex-1 flex items-center justify-center p-8">
+            <div className="flex-1 flex items-center justify-center p-8 bg-[#0b0b2b] text-[#33ff66] font-mono">
               <div className="text-center space-y-3">
-                <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto" />
-                <p className="text-xs text-slate-500 font-medium">Đang tải nội dung thư...</p>
+                <RefreshCw className="w-8 h-8 animate-spin mx-auto stroke-[3]" />
+                <p className="text-sm uppercase font-bold tracking-wider">ĐANG GIẢI MÃ NỘI DUNG MIME...</p>
               </div>
             </div>
           ) : !selectedMessage ? (
-            <div className="flex-1 bg-slate-50/50 flex flex-col items-center justify-center p-8 text-center text-slate-400 select-none">
-              <div className="w-16 h-16 rounded-2xl bg-white shadow-xs border border-slate-200/80 flex items-center justify-center mb-3">
-                <Mail className="w-8 h-8 text-slate-300" />
+            <div className="flex-1 bg-[#0b0b2b] dot-pattern flex flex-col items-center justify-center p-8 text-center select-none text-white">
+              <div className="p-4 bg-white border-4 border-[#111111] shadow-brutal mb-3 text-[#111111]">
+                <Mail className="w-10 h-10 stroke-[2.5]" />
               </div>
-              <h3 className="font-semibold text-slate-700 text-sm">Chưa chọn email nào</h3>
-              <p className="text-xs text-slate-400 mt-1 max-w-xs">
-                Bấm vào một email bên cột trái để đọc toàn bộ nội dung và lấy mã xác thực OTP.
+              <h3 className="font-heading text-xl uppercase tracking-wider text-white stroke-title">
+                CHƯA CHỌN GÓI THƯ NÀO
+              </h3>
+              <p className="text-xs text-[#33ff66] font-mono mt-1 max-w-sm">
+                Bấm vào một email bên cột trái để bóc tách mã xác nhận OTP và đọc toàn bộ nội dung.
               </p>
             </div>
           ) : (
             <div className="flex-1 flex flex-col h-full overflow-hidden">
-              {/* Header Thư */}
-              <div className="p-5 border-b border-slate-200 bg-white space-y-3">
-                <div className="flex items-start justify-between gap-4">
-                  <h2 className="text-lg md:text-xl font-bold text-slate-900 leading-snug">
-                    {selectedMessage.subject || '(Không có tiêu đề)'}
+              {/* Header chi tiết */}
+              <div className="p-4 border-b-3 border-[#111111] bg-white space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <h2 className="font-heading text-xl md:text-2xl text-[#111111] leading-tight uppercase">
+                    {selectedMessage.subject || '(KHÔNG CÓ TIÊU ĐỀ)'}
                   </h2>
                   <button
                     type="button"
                     onClick={() => deleteOneMessage(selectedMessage.id)}
-                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-slate-200"
+                    className="btn-brutal p-1.5 bg-[#e63b2e] text-white border-2 border-[#111111] shadow-brutal-sm hover:bg-red-700 cursor-pointer"
                     title="Xóa email này"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2 className="w-4 h-4 stroke-[2.5]" />
                   </button>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center text-xs">
-                      {(selectedMessage.sender_name || selectedMessage.sender || '?')[0].toUpperCase()}
-                    </div>
-                    <div>
-                      <div className="font-semibold text-slate-800 text-xs">
-                        {selectedMessage.sender_name || selectedMessage.sender}
-                      </div>
-                      <div className="text-slate-400 font-mono text-[11px]">
-                        {selectedMessage.sender} &rarr; <span className="text-indigo-600 font-semibold">{selectedMessage.recipient}</span>
-                      </div>
-                    </div>
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono font-bold bg-slate-100 p-2 border-2 border-[#111111]">
+                  <div>
+                    <span className="text-slate-500">TỪ: </span>
+                    <span className="text-[#111111] font-bold">{selectedMessage.sender_name || selectedMessage.sender}</span>
+                    <span className="text-slate-500"> &lt;{selectedMessage.sender}&gt;</span>
                   </div>
-
-                  <div className="flex items-center gap-1 text-slate-400 text-xs">
-                    <Calendar className="w-3.5 h-3.5" />
-                    <span>
-                      {selectedMessage.created_at
-                        ? new Date(selectedMessage.created_at).toLocaleString('vi-VN')
-                        : 'Vừa xong'}
-                    </span>
+                  <div>
+                    <span className="text-slate-500">ĐẾN: </span>
+                    <span className="text-[#e63b2e] font-bold">{selectedMessage.recipient}</span>
                   </div>
                 </div>
 
-                {/* THẺ OTP BANNER NỔI BẬT */}
+                {/* 4. CỤM TERMINAL OTP TO RÕ - ĐIỂM NHẤN Y2K CHÍNH */}
                 {currentOtp && (
-                  <div className="p-3.5 rounded-xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/10 border-2 border-amber-400/70 flex items-center justify-between gap-3 animate-in fade-in">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-md shadow-amber-500/30">
-                        <KeyRound className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-amber-900 block">
-                          Mã OTP Xác Thực Phát Hiện Được
-                        </span>
-                        <span className="font-mono text-2xl font-black text-amber-950 tracking-wider">
-                          {currentOtp}
+                  <div className="border-4 border-[#111111] shadow-brutal bg-[#0b0b2b] p-4 text-[#33ff66] space-y-3 animate-in fade-in">
+                    <div className="flex items-center justify-between border-b-2 border-dashed border-[#33ff66]/40 pb-2">
+                      <div className="flex items-center gap-2">
+                        <KeyRound className="w-4 h-4 text-[#ffc900]" />
+                        <span className="font-heading text-sm text-[#ffc900] tracking-wider uppercase">
+                          [SECURITY_SCANNER // OTP_DETECTED]
                         </span>
                       </div>
+                      <span className="font-mono text-[11px] text-[#33ff66]">EXP: 10 MINS</span>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => handleCopyOtp(currentOtp)}
-                      className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 ${
-                        copiedOtp ? 'bg-emerald-600 text-white' : 'bg-amber-600 hover:bg-amber-700 text-white'
-                      }`}
-                    >
-                      {copiedOtp ? (
-                        <>
-                          <Check className="w-4 h-4" />
-                          <span>Đã Sao Chép!</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-4 h-4" />
-                          <span>Sao Chép Mã</span>
-                        </>
-                      )}
-                    </button>
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-1">
+                      <div>
+                        <div className="text-[10px] font-mono text-slate-400 uppercase tracking-widest">
+                          VERIFICATION_CODE:
+                        </div>
+                        <div className="font-heading text-4xl md:text-5xl text-[#33ff66] tracking-widest drop-shadow-[0_0_10px_rgba(51,255,102,0.6)]">
+                          {currentOtp}
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleCopyOtp(currentOtp)}
+                        className={`btn-brutal px-6 py-3 border-3 border-[#111111] font-heading text-lg uppercase tracking-wider shadow-brutal flex items-center gap-2 cursor-pointer transition-all ${
+                          copiedOtp
+                            ? 'bg-[#33ff66] text-[#111111]'
+                            : 'bg-[#ff8a1e] text-[#111111] hover:bg-[#ff9933]'
+                        }`}
+                      >
+                        {copiedOtp ? (
+                          <>
+                            <Check className="w-5 h-5 stroke-[3]" />
+                            <span>ĐÃ SAO CHÉP!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-5 h-5 stroke-[3]" />
+                            <span>SAO CHÉP MÃ</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 )}
 
                 {/* Link kích hoạt nếu có */}
                 {verificationLink && (
-                  <div className="p-2.5 rounded-lg bg-indigo-50/70 border border-indigo-100 flex items-center justify-between gap-2 text-xs">
-                    <span className="text-indigo-900 truncate font-medium">Link xác thực: {verificationLink}</span>
+                  <div className="p-2.5 bg-[#ffc900] border-2 border-[#111111] shadow-brutal-sm flex items-center justify-between gap-2 text-xs font-bold">
+                    <span className="truncate text-[#111111]">LINK: {verificationLink}</span>
                     <a
                       href={verificationLink}
                       target="_blank"
                       rel="noreferrer"
-                      className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-md text-xs flex items-center gap-1 flex-shrink-0"
+                      className="btn-brutal px-3 py-1 bg-[#111111] text-white border-2 border-[#111111] flex items-center gap-1 flex-shrink-0"
                     >
-                      <span>Mở Link</span>
-                      <ExternalLink className="w-3 h-3" />
+                      <span>MỞ LINK</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
                     </a>
                   </div>
                 )}
 
-                {/* Toggle tab HTML vs Text */}
-                <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-xs">
+                {/* Folder Tabs chuyển chế độ xem */}
+                <div className="flex items-center justify-between pt-1 border-t-2 border-[#111111] text-xs">
                   <div className="flex gap-2">
                     <button
                       type="button"
                       onClick={() => setActiveTab('html')}
-                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold ${
-                        activeTab === 'html' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : 'text-slate-500'
+                      className={`btn-brutal px-3 py-1 border-2 border-[#111111] font-heading uppercase tracking-wider text-xs cursor-pointer ${
+                        activeTab === 'html' ? 'bg-[#ffc900] text-[#111111] shadow-brutal-sm' : 'bg-white text-slate-600'
                       }`}
                     >
-                      <Code2 className="w-3.5 h-3.5" />
-                      <span>Xem HTML</span>
+                      XEM GIAO DIỆN HTML
                     </button>
                     <button
                       type="button"
                       onClick={() => setActiveTab('text')}
-                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold ${
-                        activeTab === 'text' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : 'text-slate-500'
+                      className={`btn-brutal px-3 py-1 border-2 border-[#111111] font-heading uppercase tracking-wider text-xs cursor-pointer ${
+                        activeTab === 'text' ? 'bg-[#ffc900] text-[#111111] shadow-brutal-sm' : 'bg-white text-slate-600'
                       }`}
                     >
-                      <FileText className="w-3.5 h-3.5" />
-                      <span>Văn Bản Thuần</span>
+                      VĂN BẢN THUẦN (PLAIN)
                     </button>
                   </div>
-                  <span className="text-[11px] text-slate-400">
-                    {activeTab === 'html' ? 'Đã lọc bảo mật XSS' : 'Plain Text'}
+                  <span className="text-[10px] font-mono font-bold bg-[#b9b8f2] text-[#111111] px-2 py-0.5 border border-[#111111]">
+                    {activeTab === 'html' ? 'DOMPURIFY_SANITIZED' : 'RAW_TEXT'}
                   </span>
                 </div>
               </div>
 
-              {/* Nội dung thư */}
-              <div className="flex-1 overflow-y-auto p-5 bg-slate-50/50">
+              {/* Khung nội dung Body */}
+              <div className="flex-1 overflow-y-auto p-4 bg-[#f1f5f9]">
                 {activeTab === 'html' && sanitizedHtml ? (
                   <div
-                    className="bg-white p-5 rounded-xl shadow-2xs border border-slate-200 max-w-3xl mx-auto prose prose-slate max-w-none text-sm"
+                    className="bg-white p-5 border-3 border-[#111111] shadow-brutal max-w-3xl mx-auto prose prose-slate max-w-none text-sm"
                     dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
                   />
                 ) : (
-                  <div className="bg-white p-5 rounded-xl shadow-2xs border border-slate-200 max-w-3xl mx-auto font-mono text-xs text-slate-800 whitespace-pre-wrap leading-relaxed">
-                    {selectedMessage.text_content || 'Không có nội dung văn bản.'}
+                  <div className="bg-[#0b0b2b] text-[#33ff66] p-4 border-3 border-[#111111] shadow-brutal max-w-3xl mx-auto font-mono text-xs whitespace-pre-wrap leading-relaxed">
+                    {selectedMessage.text_content || 'KHÔNG CÓ NỘI DUNG VĂN BẢN.'}
                   </div>
                 )}
               </div>
             </div>
           )}
-        </section>
+        </div>
       </main>
+
+      {/* FOOTER RETRO Y2K */}
+      <footer className="bg-[#0b0b2b] border-t-4 border-[#111111] text-white py-3 px-4 text-xs font-mono">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-[#33ff66]">●</span>
+            <span>MAIL247 RETRO-TECH v2.0 // NEO-BRUTALISM ENGINE</span>
+          </div>
+          <div className="text-slate-400">
+            CLOUDFLARE_EMAIL_ROUTING + D1_SQLITE
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

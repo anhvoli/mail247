@@ -2,18 +2,56 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Custom Scrollbar */
+:root {
+  --lavender: #b9b8f2;   /* nền chính, tím lavender */
+  --navy:     #0b0b2b;   /* thanh header, nền terminal */
+  --orange:   #ff8a1e;   /* nút CTA chính */
+  --red:      #e63b2e;   /* logo, nút nhấn mạnh */
+  --yellow:   #ffc900;   /* điểm nhấn, nav, badge */
+  --green:    #33ff66;   /* chữ trong terminal */
+  --white:    #ffffff;
+  --black:    #111111;
+
+  --border: 3px solid #111111;
+  --shadow: 5px 5px 0 #111111;   /* bóng cứng, không blur */
+  --radius: 0px;                 /* góc vuông */
+}
+
+/* Họa tiết nền chấm Halftone Retro */
+.dot-pattern {
+  background-color: #0b0b2b;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.25) 1.5px, transparent 1.5px);
+  background-size: 8px 8px;
+}
+
+/* Hiệu ứng bấm nút bóng cứng thụt vào trong */
+.btn-brutal {
+  transition: transform 0.05s ease, box-shadow 0.05s ease;
+}
+.btn-brutal:active {
+  transform: translate(4px, 4px) !important;
+  box-shadow: 0 0 0 #111111 !important;
+}
+
+/* Chữ viền phong cách GENFOLIO */
+.stroke-title {
+  -webkit-text-stroke: 1.5px #111111;
+  text-shadow: 3px 3px 0 #111111;
+}
+
+/* Custom Scrollbar Retro */
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: #0b0b2b;
+  border-left: 2px solid #111111;
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 9999px;
+  background: #ff8a1e;
+  border: 2px solid #111111;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #ffc900;
 }
