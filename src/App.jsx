@@ -16,7 +16,8 @@ import {
   Inbox,
   ArrowRight,
   ShieldCheck,
-  Dices
+  Dices,
+  Bell
 } from 'lucide-react';
 import DOMPurify from 'dompurify';
 
@@ -56,13 +57,13 @@ export default function App() {
   const [recentEmails, setRecentEmails] = useState(() => {
     try {
       const saved = localStorage.getItem('mail247_recents');
-      return saved ? JSON.parse(saved) : ['admin@qoder.io.vn'];
+      return saved ? JSON.parse(saved) : ['yenbeo@qoder.io.vn', 'admin@qoder.io.vn'];
     } catch {
-      return ['admin@qoder.io.vn'];
+      return ['yenbeo@qoder.io.vn', 'admin@qoder.io.vn'];
     }
   });
 
-  const [activeEmail, setActiveEmail] = useState(() => recentEmails[0] || 'admin@qoder.io.vn');
+  const [activeEmail, setActiveEmail] = useState(() => recentEmails[0] || 'yenbeo@qoder.io.vn');
   const [inputEmail, setInputEmail] = useState('');
   const [selectedDomain, setSelectedDomain] = useState(DOMAINS[0]);
 
@@ -77,11 +78,34 @@ export default function App() {
   const [copiedOtp, setCopiedOtp] = useState(false);
   const [copiedEmail, setCopiedEmail] = useState(false);
   const [searchFilter, setSearchFilter] = useState('');
+  const [activeInboxes, setActiveInboxes] = useState([]);
 
   // Lưu lịch sử gần đây vào localStorage
   useEffect(() => {
     localStorage.setItem('mail247_recents', JSON.stringify(recentEmails));
   }, [recentEmails]);
+
+  // Tự động quét các hòm thư vừa có thư mới trên hệ thống
+  const checkActiveInboxes = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/active-inboxes`);
+      const json = await res.json();
+      if (json.success && json.data?.length > 0) {
+        setActiveInboxes(json.data);
+        // Tự động đẩy các hòm thư có thư vào danh sách gần đây
+        setRecentEmails((prev) => {
+          const incoming = json.data.map((d) => d.email);
+          return Array.from(new Set([...incoming, ...prev]));
+        });
+      }
+    } catch (err) {
+      console.error('Lỗi kiểm tra hòm thư hoạt động:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    checkActiveInboxes();
+  }, [checkActiveInboxes]);
 
   // Thêm một email vào danh sách theo dõi
   const openEmail = useCallback((target) => {
@@ -205,13 +229,14 @@ export default function App() {
       setCountdown((prev) => {
         if (prev <= 1) {
           fetchMessages(activeEmail);
+          checkActiveInboxes();
           return 5;
         }
         return prev - 1;
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, [autoRefresh, activeEmail, fetchMessages]);
+  }, [autoRefresh, activeEmail, fetchMessages, checkActiveInboxes]);
 
   const handleCopyOtp = (otp) => {
     if (!otp) return;
@@ -287,7 +312,7 @@ export default function App() {
             <div className="relative flex-1 flex rounded-xl border border-slate-300 bg-slate-50 focus-within:bg-white focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-indigo-500 transition-all overflow-hidden shadow-2xs">
               <input
                 type="text"
-                placeholder="Nhập tiền tố hoặc email đầy đủ (ví dụ: admin hoặc user@qoder.io.vn)..."
+                placeholder="Nhập tên mail (ví dụ: yenbeo hoặc yenbeo@qoder.io.vn)..."
                 value={inputEmail}
                 onChange={(e) => setInputEmail(e.target.value)}
                 className="flex-1 px-3.5 py-2 text-xs md:text-sm bg-transparent outline-none font-medium text-slate-800 placeholder-slate-400"
@@ -327,7 +352,7 @@ export default function App() {
           </form>
         </div>
 
-        {/* DANH SÁCH CÁC HÒM THƯ GẦN ĐÂY (QUẢN LÝ ĐA MAIL SIÊU NHANH) */}
+        {/* DANH SÁCH CÁC HÒM THƯ GẦN ĐÂY */}
         {recentEmails.length > 0 && (
           <div className="flex items-center gap-2 overflow-x-auto pt-2.5 scrollbar-none text-xs">
             <span className="text-slate-400 text-[11px] font-semibold flex-shrink-0">
@@ -366,10 +391,42 @@ export default function App() {
             </div>
           </div>
         )}
+
+        {/* THÔNG BÁO HÒM THƯ VỪA CÓ THƯ MỚI TRÊN HỆ THỐNG */}
+        {activeInboxes.length > 0 && (
+          <div className="mt-2.5 px-3 py-1.5 bg-indigo-50/80 rounded-lg border border-indigo-100 flex items-center justify-between text-xs flex-wrap gap-2">
+            <div className="flex items-center gap-1.5 text-indigo-900 font-medium">
+              <Sparkles className="w-3.5 h-3.5 text-indigo-600 flex-shrink-0" />
+              <span>Hòm thư vừa nhận email mới trên hệ thống:</span>
+            </div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {activeInboxes.map((inbox) => (
+                <button
+                  key={inbox.email}
+                  type="button"
+                  onClick={() => {
+                    setActiveEmail(inbox.email);
+                    setSelectedMessage(null);
+                  }}
+                  className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border transition-all flex items-center gap-1 ${
+                    activeEmail === inbox.email
+                      ? 'bg-indigo-600 text-white border-indigo-600'
+                      : 'bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-100'
+                  }`}
+                >
+                  <span>{inbox.email}</span>
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-400 text-amber-950">
+                    {inbox.count} thư
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </header>
 
       {/* THÂN CHÍNH: 2 CỘT (DANH SÁCH THƯ VÀ NỘI DUNG CHI TIẾT) */}
-      <main className="flex-1 flex overflow-hidden h-[calc(100vh-6.5rem)]">
+      <main className="flex-1 flex overflow-hidden h-[calc(100vh-7.5rem)]">
         {/* CỘT TRÁI: HỘP THƯ ĐẾN (INBOX) */}
         <aside className="w-80 md:w-96 bg-white border-r border-slate-200 flex flex-col flex-shrink-0 h-full select-none">
           {/* Header hộp thư */}
