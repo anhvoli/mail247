@@ -7,12 +7,11 @@ import {
   KeyRound,
   Check,
   Copy,
-  ExternalLink,
   Code2,
   FileText
 } from 'lucide-react';
 import DOMPurify from 'dompurify';
-import { extractOtp, extractLink } from '../utils/mailHelper';
+import { extractOtp } from '../utils/mailHelper';
 
 export default function TerminalViewer({
   selectedMessage,
@@ -25,10 +24,6 @@ export default function TerminalViewer({
   const currentOtp =
     selectedMessage?.otp_code ||
     (selectedMessage ? extractOtp(selectedMessage.text_content, selectedMessage.html_content) : null);
-
-  const verificationLink = selectedMessage
-    ? extractLink(selectedMessage.html_content, selectedMessage.text_content)
-    : null;
 
   const sanitizedHtml = selectedMessage?.html_content
     ? DOMPurify.sanitize(selectedMessage.html_content, {
@@ -155,22 +150,6 @@ export default function TerminalViewer({
                     )}
                   </button>
                 </div>
-              </div>
-            )}
-
-            {/* Link kích hoạt nếu có */}
-            {verificationLink && (
-              <div className="p-2.5 bg-[#ffc900] border-2 border-[#111111] shadow-brutal-sm flex items-center justify-between gap-2 text-xs font-bold">
-                <span className="truncate text-[#111111]">LINK: {verificationLink}</span>
-                <a
-                  href={verificationLink}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="btn-brutal px-3 py-1 bg-[#111111] text-white border-2 border-[#111111] flex items-center gap-1 flex-shrink-0"
-                >
-                  <span>MỞ LINK</span>
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </a>
               </div>
             )}
 
