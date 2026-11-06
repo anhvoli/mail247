@@ -57,7 +57,7 @@ function loadYouTubeApi() {
 
 const IFRAME_ALLOW = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
 
-export default function YouTubePlayer({ videoId, onEnded, onPlayerReady, controls = true }) {
+export default function YouTubePlayer({ videoId, onEnded, onPlayerReady, controls = true, startSeconds = 0 }) {
   // Container do React sở hữu, JSX không render con nào bên trong — mọi node
   // con (mount div / iframe) đều tạo bằng tay, YT thay thế chúng cũng không
   // làm lệch cây DOM của React.
@@ -68,6 +68,10 @@ export default function YouTubePlayer({ videoId, onEnded, onPlayerReady, control
   const onPlayerReadyRef = useRef(onPlayerReady);
   const videoIdRef = useRef(videoId);
   const controlsRef = useRef(controls);
+  // Giây bắt đầu (round 3): khi player bị unmount lúc ẩn màn live (góc ghế /
+  // góc ngược) rồi mount lại, phát tiếp từ đúng giây đã xem tới thay vì về 0.
+  const startSecondsRef = useRef(startSeconds);
+  useEffect(() => { startSecondsRef.current = startSeconds; }, [startSeconds]);
   const loadedVideoIdRef = useRef(null);
   const pendingVideoIdRef = useRef(null);
   const endedFiredForRef = useRef(null);
@@ -109,7 +113,7 @@ export default function YouTubePlayer({ videoId, onEnded, onPlayerReady, control
       if (pendingVideoIdRef.current && pendingVideoIdRef.current !== loadedVideoIdRef.current) {
         const vid = pendingVideoIdRef.current;
         pendingVideoIdRef.current = null;
-        try { target.loadVideoById(vid); loadedVideoIdRef.current = vid; } catch { /* ignore */ }
+        try { target.loadVideoById(vid, startSecondsRef.current || 0); loadedVideoIdRef.current = vid; } catch { /* ignore */ }
       } else {
         loadedVideoIdRef.current = videoIdRef.current;
       }
@@ -137,7 +141,7 @@ export default function YouTubePlayer({ videoId, onEnded, onPlayerReady, control
       container.innerHTML = '';
       const iframe = document.createElement('iframe');
       iframe.title = 'Trình phát video';
-      iframe.src = `https://www.youtube.com/embed/${videoIdRef.current}?autoplay=1&rel=0&enablejsapi=1`;
+      iframe.src = `https://www.youtube.com/embed/${videoIdRef.current}?autoplay=1&rel=0&enablejsapi=1&start=${Math.floor(startSecondsRef.current || 0)}`;
       iframe.allow = IFRAME_ALLOW;
       iframe.allowFullscreen = true;
       iframe.style.width = '100%';
@@ -169,7 +173,7 @@ export default function YouTubePlayer({ videoId, onEnded, onPlayerReady, control
     };
 
     loadYouTubeApi()
-      .then((YT) => { if (!cancelled) attach(YT, lastTimeRef.current || 0); })
+      .then((YT) => { if (!cancelled) attach(YT, startSecondsRef.current || lastTimeRef.current || 0); })
       .catch(() => { if (!cancelled) createFallbackIframe(); });
 
     return () => {

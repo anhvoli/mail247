@@ -2,11 +2,71 @@ import { useEffect, useRef, useState } from 'react';
 import Cinema3D, { CAMERA_PRESETS } from './Cinema3D';
 import ErrorBoundary from './ErrorBoundary';
 import SeatMap from './SeatMap';
-import YouTubePlayer from '../youtube';
 import { EMOJI_GROUPS, GESTURES, MISSIONS } from '../data';
 
 function fmtTime(d) {
   return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+}
+
+function fmtClock(s) {
+  s = Math.max(0, Math.floor(s || 0));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+function parseDuration(str) {
+  const m = String(str || '').match(/(\d+):(\d+)/);
+  return m ? (+m[1]) * 60 + (+m[2]) : 0;
+}
+
+// Panel "TRÊN MÀN ẢNH" như bản gốc (đè lên góc trái khung 3D): tên bài, người
+// đề xuất, thời gian hiện tại / tổng thời lượng, thanh tiến trình, vote bỏ qua
+// theo đúng định dạng gốc "Vote bỏ qua X/Y" và "X/N người thật đồng ý · P% ·
+// Đủ 30% thì chuyển bài".
+function NowPlayingPanel({ current, queue, playhead, skipCount, skipThreshold, realCount, skipVoted, onVoteSkip }) {
+  const suggester = queue.find((q) => q.id === current.id)?.byGuest || current.by;
+  const dur = playhead.dur > 0 ? playhead.dur : parseDuration(current.duration);
+  const pct = dur > 0 ? Math.min(100, (playhead.cur / dur) * 100) : 0;
+  const agreePct = realCount > 0 ? Math.round((skipCount / realCount) * 100) : 0;
+  return (
+    <div className="now-playing">
+      <div className="kicker">Trên màn ảnh</div>
+      <div className="title">{current.title}</div>
+      <div className="meta">{suggester} đề xuất · {fmtClock(playhead.cur)} / {fmtClock(dur)}</div>
+      <div className="progress"><div style={{ width: `${pct}%` }} /></div>
+      <button className="skip-btn" disabled={skipVoted} onClick={onVoteSkip}>
+        ▶ Vote bỏ qua {skipCount}/{skipThreshold}
+      </button>
+      <div className="vote-line">
+        {skipCount}/{realCount} người thật đồng ý · {agreePct}% · Đủ 30% thì chuyển bài
+      </div>
+    </div>
+  );
+}
+
+// Thanh dọc bên phải khung 3D (như bản gốc): Hàng chờ / Trò chuyện / Tương tác
+// chuyển tab hoặc cuộn tới hàng điệu bộ; Gửi video mở tab hàng đợi;
+// Chiếu ảnh / Tủ đồ / Ủng hộ là tính năng phase sau (bấm chỉ báo, không giả vờ có).
+function RightRail({ queueCount, onTab, onToast, gestureRowRef }) {
+  const items = [
+    { icon: '➕', label: 'Gửi video', act: () => { onTab('queue'); onToast('Dán link YouTube vào ô bên dưới rồi bấm Thêm.'); } },
+    { icon: '🖼️', label: 'Chiếu ảnh', act: () => onToast('Chiếu ảnh sẽ có ở phase sau (cần số dư ủng hộ).') },
+    { icon: '☰', label: 'Hàng chờ', badge: queueCount, act: () => onTab('queue') },
+    { icon: '💬', label: 'Trò chuyện', act: () => onTab('chat') },
+    { icon: '✨', label: 'Tương tác', act: () => gestureRowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }) },
+    { icon: '👕', label: 'Tủ đồ', act: () => onToast('Tủ đồ sẽ có ở phase sau.') },
+    { icon: '❤️', label: 'Ủng hộ', act: () => onToast('Ủng hộ sẽ có ở phase sau.') },
+  ];
+  return (
+    <div className="rail">
+      {items.map((it) => (
+        <button key={it.label} onClick={it.act} title={it.label}>
+          <span className="ic">{it.icon}</span>
+          {it.badge ? <span className="badge">{it.badge}</span> : null}
+          <span>{it.label}</span>
+        </button>
+      ))}
+    </div>
+  );
 }
 
 // Ảnh thumbnail hàng đợi: thử default.jpg, lỗi thì thử mqdefault.jpg, vẫn lỗi thì
@@ -27,7 +87,7 @@ function QueueThumb({ videoId, title }) {
 
 export default function RoomView({ guest, roomState, onLeave, exp, missionsDone, onMissionDone, onChatSent }) {
   const { room, seats, mySeat, pickSeat, queue, current, voted, vote, addToQueue,
-    messages, sendMessage, skipVoted, voteSkip, skipCount, skipThreshold, occupiedCount, advanceToNext } = roomState;
+    messages, sendMessage, skipVoted, voteSkip, skipCount, skipThreshold, realCount, occupiedCount, advanceToNext } = roomState;
   const [tab, setTab] = useState('queue');
   const [chatText, setChatText] = useState('');
   const [showEmoji, setShowEmoji] = useState(false);
@@ -38,8 +98,41 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
   const [camera, setCamera] = useState('overview');
   const [controlsOn, setControlsOn] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  // Thời gian phát hiện tại (poll player mỗi giây): vừa để hiện đồng hồ +
+  // thanh tiến trình ở panel "TRÊN MÀN ẢNH", vừa để khi player bị unmount
+  // lúc ẩn màn live (góc ghế/góc ngược) rồi mount lại thì phát tiếp từ
+  // đúng giây đã xem tới thay vì về 0 (startSeconds).
+  const [playhead, setPlayhead] = useState({ cur: 0, dur: 0 });
   const stageRef = useRef(null);
   const playerRef = useRef(null);
+  const gestureRowRef = useRef(null);
+
+  useEffect(() => {
+    const t = setInterval(() => {
+      const p = playerRef.current;
+      if (!p) return;
+      try {
+        const dur = p.getDuration ? p.getDuration() : 0;
+        const cur = p.getCurrentTime ? p.getCurrentTime() : 0;
+        if (dur > 0) setPlayhead({ cur, dur });
+      } catch { /* player chưa sẵn / đã hủy */ }
+    }, 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const showToast = (text, ms = 3500) => {
+    setToast(text);
+    setTimeout(() => setToast(''), ms);
+  };
+
+  const doVoteSkip = () => {
+    voteSkip();
+    // Hiện rõ 1/1 ngay khi vote: round 1 chờ có 600ms là đổi bài
+    // và reset counter về 0/1, nên người bấm không bao giờ thấy
+    // vote của mình được ghi (nay chờ 2 giây mới chuyển bài).
+    setToast(`Đã ghi nhận vote bỏ qua (${skipThreshold}/${skipThreshold}) — chuyển bài sau 2 giây…`);
+    setTimeout(() => setToast(''), 2500);
+  };
 
   // Escape thoát toàn màn hình (kể cả khi đang ở góc "Tập trung màn hình").
   useEffect(() => {
@@ -100,6 +193,7 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
       <div className="topbar">
         <button className="btn ghost" onClick={onLeave}>← Sảnh</button>
         <b>{room.name}</b>
+        <span className="chip live">● Đang chiếu</span>
         <span className="chip">{occupiedCount}/{room.totalSeats} ghế · {occupiedCount} đang online</span>
         <span className="chip">Ghế của bạn: {mySeat || 'chưa chọn'}</span>
         <span className="spacer" />
@@ -111,24 +205,31 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
           <div className="view3d">
             {/* Canvas 3D không bao giờ bị unmount/thay thế khi đổi góc camera
                 (chỉ camera di chuyển — xem Rig trong Cinema3D.jsx); bọc thêm
-                ErrorBoundary để lỗi WebGL chỉ hiện khung báo lỗi tại chỗ. */}
+                ErrorBoundary để lỗi WebGL chỉ hiện khung báo lỗi tại chỗ.
+                Video LIVE nằm TRÊN mặt màn hình 3D bằng drei Html transform
+                (xem Cinema3D.jsx) — chỉ hiện ở góc toàn cảnh + tập trung màn
+                hình; góc ghế / góc ngược thì ẩn iframe (chỉ còn thumbnail),
+                vì iframe DOM luôn vẽ trên canvas và sẽ "xuyên" qua ghế ngồi,
+                còn góc ngược thì màn hình ở sau lưng người xem. */}
             <ErrorBoundary>
-              <Cinema3D room={room} seats={seats} mySeat={mySeat} guest={guest} cameraPreset={camera} videoId={current.id} />
+              <Cinema3D room={room} seats={seats} mySeat={mySeat} guest={guest}
+                cameraPreset={camera} videoId={current.id}
+                showLive={camera === 'overview' || camera === 'screen'}
+                onEnded={advanceToNext} onPlayerReady={(p) => { playerRef.current = p; }}
+                controls={controlsOn} startSeconds={Math.floor(playhead.cur)} />
             </ErrorBoundary>
-            <span className="cam-label">{CAMERA_PRESETS[camera].label}</span>
-          </div>
-          <div className="player-wrap">
-            {/* Không dùng key={current.nonce} nữa: đổi bài thì player nạp bài
-                mới bằng loadVideoById, giữ nguyên instance (và handler ENDED)
-                thay vì hủy + tạo lại toàn bộ player mỗi lần đổi bài. */}
-            <YouTubePlayer videoId={current.id}
-              onEnded={advanceToNext} onPlayerReady={(p) => { playerRef.current = p; }}
-              controls={controlsOn} />
+            <NowPlayingPanel current={current} queue={queue} playhead={playhead}
+              skipCount={skipCount} skipThreshold={skipThreshold} realCount={realCount}
+              skipVoted={skipVoted} onVoteSkip={doVoteSkip} />
+            <RightRail queueCount={queue.length}
+              onTab={setTab} onToast={(t) => showToast(t)} gestureRowRef={gestureRowRef} />
             {camera === 'screen' && (
               <button className="focus-exit" onClick={() => setCamera('overview')}>
                 ✕ Thoát góc tập trung màn hình
               </button>
             )}
+            <span className="cam-label">{CAMERA_PRESETS[camera].label}</span>
+            <span className="wasd-hint">W A S D để đi lại · Space để nhảy · E hoặc bấm vào ghế để ngồi</span>
           </div>
           <div className="controls">
             <span><b>Đang chiếu:</b> {current.title} · {current.by}</span>
@@ -146,7 +247,7 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
               </button>
             </span>
           </div>
-          <div className="gesture-row">
+          <div className="gesture-row" ref={gestureRowRef}>
             {GESTURES.map((g) => (
               <button key={g.id} className={gesture === g.id ? 'active' : ''} onClick={() => doGesture(g)}>
                 {g.icon} {g.label}
@@ -170,14 +271,7 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
               <div className="skip-box">
                 Vote bỏ qua: {skipCount}/{skipThreshold} người thật · Đủ 30% thì chuyển bài.
                 <br />
-                <button className="btn ghost" style={{ marginTop: 8 }} disabled={skipVoted} onClick={() => {
-                  voteSkip();
-                  // Hiện rõ 1/1 ngay khi vote: round 1 chờ có 600ms là đổi bài
-                  // và reset counter về 0/1, nên người bấm không bao giờ thấy
-                  // vote của mình được ghi (nay chờ 2 giây mới chuyển bài).
-                  setToast(`Đã ghi nhận vote bỏ qua (${skipThreshold}/${skipThreshold}) — chuyển bài sau 2 giây…`);
-                  setTimeout(() => setToast(''), 2500);
-                }}>
+                <button className="btn ghost" style={{ marginTop: 8 }} disabled={skipVoted} onClick={doVoteSkip}>
                   {skipVoted ? 'Đã vote bỏ qua ✓' : 'Vote bỏ qua bài này'}
                 </button>
               </div>

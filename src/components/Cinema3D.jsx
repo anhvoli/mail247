@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
+import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { seatId } from '../data';
+import YouTubePlayer from '../youtube';
 
 // 4 góc camera như bản gốc: toàn cảnh, từ ghế, tập trung màn hình, từ màn chiếu về hàng ghế.
 // Góc "từ màn chiếu" phải đứng TRƯỚC mặt màn hình (z = -6.2, màn hình ở z = -8) rồi
@@ -28,11 +30,12 @@ function Rig({ preset }) {
   return null;
 }
 
-// Màn hình chiếu: hiển thị ảnh thumbnail của video đang chiếu (YouTube không cho
-// nhúng iframe làm texture WebGL, nên mặt màn hình dùng thumbnail; video thật chạy
-// ở iframe overlay khi chọn góc "Tập trung màn hình" — xem RoomView + README).
-// Nạp texture bằng TextureLoader.load có onError (không dùng useLoader, để thumbnail
-// lỗi thì mặt màn hình vẫn là tấm phát sáng xanh, không vỡ cả rạp).
+// Màn hình chiếu: hiển thị ảnh thumbnail của video đang chiếu làm LỚP NỀN
+// dưới iframe live (YouTube không cho nhúng iframe làm texture WebGL).
+// Khi iframe live bị ẩn (góc ghế / góc ngược — xem LiveScreen), mặt màn hình
+// vẫn có thumbnail nên không bao giờ trống. Nạp bằng TextureLoader.load có
+// onError (không dùng useLoader, để thumbnail lỗi thì mặt màn hình vẫn là tấm
+// phát sáng xanh, không vỡ cả rạp).
 function ScreenFace({ videoId, width, height }) {
   const [texture, setTexture] = useState(null);
   useEffect(() => {
@@ -60,6 +63,31 @@ function ScreenFace({ videoId, width, height }) {
       <planeGeometry args={[width, height]} />
       <meshBasicMaterial map={texture} toneMapped={false} />
     </mesh>
+  );
+}
+
+// Màn hình chiếu LIVE (round 3): drei Html transform nhúng đúng iframe trình
+// phát YouTube lên mặt phẳng màn hình trong cảnh 3D — video chạy thật, đổi góc
+// camera thì màn hình phối cảnh theo như màn hình thật, không phải ảnh tĩnh.
+// Tỉ lệ của drei (đọc từ node_modules/@react-three/drei/web/Html.js):
+// bề rộng thế giới = px * distanceFactor / 400, nên div 900x500px +
+// distanceFactor 4 = đúng 9x5 đơn vị (màn rạp phim); Rạp Trời 1100x600px = 11x6.
+// Iframe DOM nằm TRÊN canvas WebGL nên: (a) ở góc "từ màn chiếu về hàng ghế"
+// (camera đứng trước mặt màn hình, nhìn ngược lại) màn hình ở sau lưng người
+// xem — RoomView không render LiveScreen ở góc đó; (b) ở góc ghế, ghế ngồi có
+// thể bị iframe "xuyên qua" (iframe luôn vẽ trên canvas) nên cũng ẩn ở góc
+// ghế — lúc đó mặt màn hình chỉ còn thumbnail (ScreenFace) làm nền, không
+// bao giờ trống. Player vẫn là 1 instance duy nhất (youtube.jsx): ẩn/hiện
+// theo góc thì player unmount/remount và phát tiếp từ startSeconds (giây đã
+// xem tới) nhờ RoomView poll getCurrentTime mỗi giây.
+function LiveScreen({ videoId, onEnded, onPlayerReady, controls, startSeconds, width, height }) {
+  return (
+    <Html transform distanceFactor={4} position={[0, 2.6, -7.9]} zIndexRange={[10, 0]}>
+      <div style={{ width: `${width * 100}px`, height: `${height * 100}px` }}>
+        <YouTubePlayer videoId={videoId} onEnded={onEnded} onPlayerReady={onPlayerReady}
+          controls={controls} startSeconds={startSeconds} />
+      </div>
+    </Html>
   );
 }
 
@@ -120,6 +148,98 @@ function SpeakerTower({ position }) {
   );
 }
 
+// Trang trí sự kiện T1 vs BLG (bán kết CKTG 2026, 05:00 thứ Hai 09.11.2026)
+// — CHỈ trang trí phần xung quanh, KHÔNG đụng màn hình: cờ dọc gắn phẳng lên
+// 2 tường bên (đúng phối cảnh + ánh sáng 3D, không phải ảnh dán phẳng), banner
+// ngang trên tường sau phía trên màn hình, viền vàng mỏng quanh khung màn.
+// Tắt nhanh bằng EVENT_DECOR = false. Cặp đấu chỉ chốt khi T1 thắng KC 7/11.
+const EVENT_DECOR = true;
+
+function makeVerticalBannerTexture({ bg, title, sub, accent }) {
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 512;
+  const x = c.getContext('2d');
+  const g = x.createLinearGradient(0, 0, 0, 512);
+  g.addColorStop(0, bg); g.addColorStop(1, '#0d0d0d');
+  x.fillStyle = g; x.fillRect(0, 0, 256, 512);
+  x.strokeStyle = accent; x.lineWidth = 6; x.strokeRect(10, 10, 236, 492);
+  x.fillStyle = '#ffffff'; x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.font = '900 96px Arial, sans-serif';
+  const lines = title.split('');
+  const startY = 190;
+  lines.forEach((ch, i) => x.fillText(ch, 128, startY + i * 92));
+  x.fillStyle = accent; x.font = '700 34px Arial, sans-serif';
+  x.fillText(sub, 128, 430);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+  return tex;
+}
+
+function makeHorizontalBannerTexture({ text, bg = '#0d0d0d', fg = '#ffd75e' }) {
+  const c = document.createElement('canvas');
+  c.width = 1024; c.height = 96;
+  const x = c.getContext('2d');
+  x.fillStyle = bg; x.fillRect(0, 0, 1024, 96);
+  x.strokeStyle = fg; x.lineWidth = 4; x.strokeRect(6, 6, 1012, 84);
+  x.fillStyle = fg; x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.font = '700 44px Arial, sans-serif';
+  x.fillText(text, 512, 50);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+  return tex;
+}
+
+function EventDecor() {
+  const t1Tex = useMemo(() => makeVerticalBannerTexture({ bg: '#a80000', title: 'T1', sub: 'LCK', accent: '#ffd75e' }), []);
+  const blgTex = useMemo(() => makeVerticalBannerTexture({ bg: '#0077b6', title: 'BLG', sub: 'LPL', accent: '#ff7ab8' }), []);
+  const topTex = useMemo(() => makeHorizontalBannerTexture({ text: 'BÁN KẾT  •  CKTG 2026  •  T1 vs BLG' }), []);
+  const timeTex = useMemo(() => makeHorizontalBannerTexture({ text: '05:00  •  THỨ HAI 09.11.2026  •  BO5' }), []);
+  return (
+    <group>
+      {/* Đèn màu nhẹ 2 bên sân khấu: đỏ bên T1, xanh bên BLG */}
+      <pointLight position={[-6, 3, -6]} intensity={12} color="#ff2020" />
+      <pointLight position={[6, 3, -6]} intensity={12} color="#00a8ff" />
+      {/* Cờ dọc tường trái: T1 — đặt lệch z khỏi đèn tường (-1 / 4) để không che đèn */}
+      <mesh position={[-8.05, 3.0, 1.5]} rotation={[0, Math.PI / 2, 0]}>
+        <planeGeometry args={[1.1, 2.6]} />
+        <meshBasicMaterial map={t1Tex} toneMapped={false} />
+      </mesh>
+      <mesh position={[-8.05, 3.0, 6.5]} rotation={[0, Math.PI / 2, 0]}>
+        <planeGeometry args={[1.1, 2.6]} />
+        <meshBasicMaterial map={t1Tex} toneMapped={false} />
+      </mesh>
+      {/* Cờ dọc tường phải: BLG */}
+      <mesh position={[8.05, 3.0, 1.5]} rotation={[0, -Math.PI / 2, 0]}>
+        <planeGeometry args={[1.1, 2.6]} />
+        <meshBasicMaterial map={blgTex} toneMapped={false} />
+      </mesh>
+      <mesh position={[8.05, 3.0, 6.5]} rotation={[0, -Math.PI / 2, 0]}>
+        <planeGeometry args={[1.1, 2.6]} />
+        <meshBasicMaterial map={blgTex} toneMapped={false} />
+      </mesh>
+      {/* Banner ngang trên tường sau, phía trên rèm — không che màn hình */}
+      <mesh position={[0, 6.6, -8.6]}>
+        <planeGeometry args={[8, 0.75]} />
+        <meshBasicMaterial map={topTex} toneMapped={false} />
+      </mesh>
+      {/* Băng giờ: dải mỏng sát sàn trước sân khấu, dưới tầm màn hình */}
+      <mesh position={[0, 0.38, -7.55]} rotation={[-0.35, 0, 0]}>
+        <planeGeometry args={[6.5, 0.62]} />
+        <meshBasicMaterial map={timeTex} toneMapped={false} />
+      </mesh>
+      {/* Viền vàng mỏng quanh khung màn hình */}
+      <mesh position={[0, 5.32, -8.05]}>
+        <boxGeometry args={[9.7, 0.07, 0.06]} />
+        <meshBasicMaterial color="#ffd75e" toneMapped={false} />
+      </mesh>
+      <mesh position={[0, -0.12, -8.05]}>
+        <boxGeometry args={[9.7, 0.07, 0.06]} />
+        <meshBasicMaterial color="#ffd75e" toneMapped={false} />
+      </mesh>
+    </group>
+  );
+}
+
 // Đèn tường ấm 2 bên (đèn + quầng sáng).
 function WallLight({ position }) {
   return (
@@ -136,7 +256,7 @@ function WallLight({ position }) {
   );
 }
 
-function Seat({ position, color, mine, baseColor = '#232a38', baseBack = '#2c3547' }) {
+function Seat({ position, color, mine, name, baseColor = '#232a38', baseBack = '#2c3547' }) {
   return (
     <group position={position}>
       <mesh position={[0, 0.35, 0]}>
@@ -159,7 +279,24 @@ function Seat({ position, color, mine, baseColor = '#232a38', baseBack = '#2c354
           <meshStandardMaterial color="#e8c39a" />
         </mesh>
       )}
+      {/* Bảng tên lơ lửng trên đầu người ngồi (như bản gốc) */}
+      {name && (
+        <Html position={[0, 2.05, 0]} center distanceFactor={10} zIndexRange={[4, 0]} style={{ pointerEvents: 'none' }}>
+          <div className="nametag">{name}</div>
+        </Html>
+      )}
     </group>
+  );
+}
+
+// Vòng xanh lá trên sàn quanh ghế trống (như bản gốc: ghế trống đánh dấu bằng
+// vòng tròn xanh trên sàn).
+function EmptySeatRing({ position }) {
+  return (
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[position[0], 0.02, position[2]]}>
+      <ringGeometry args={[0.5, 0.64, 28]} />
+      <meshBasicMaterial color="#b8cd8e" toneMapped={false} />
+    </mesh>
   );
 }
 
@@ -170,7 +307,7 @@ const STARS = Array.from({ length: 40 }, (_, i) => {
   return [Math.cos(a) * r, 7 + (i % 5), -6 - (i % 9) * 0.8];
 });
 
-function Auditorium({ room, seats, mySeat, guest, videoId }) {
+function Auditorium({ room, seats, mySeat, guest, videoId, showLive, onEnded, onPlayerReady, controls, startSeconds }) {
   const isSky = room.kind === 'sky';
   const seatMeshes = [];
   const tableMeshes = [];
@@ -179,11 +316,14 @@ function Auditorium({ room, seats, mySeat, guest, videoId }) {
       for (let c = 1; c <= room.cols; c++) {
         const id = seatId(row, c);
         const occ = seats[id];
+        const pos = [(c - 5.5) * 1.05, 0, 2 + ri * 1.15];
         seatMeshes.push(
-          <Seat key={id} position={[(c - 5.5) * 1.05, 0, 2 + ri * 1.15]}
+          <Seat key={id} position={pos}
             color={occ ? (occ.kind === 'me' ? guest.color.hex : '#8bc6c0') : null}
-            mine={occ?.kind === 'me'} />,
+            mine={occ?.kind === 'me'}
+            name={occ ? occ.name : null} />,
         );
+        if (!occ) seatMeshes.push(<EmptySeatRing key={`ring-${id}`} position={pos} />);
       }
     });
   } else {
@@ -208,12 +348,15 @@ function Auditorium({ room, seats, mySeat, guest, videoId }) {
         const a = (s / room.seatsPerTable) * Math.PI * 2;
         const id = `B${String(t + 1).padStart(2, '0')}-${s + 1}`;
         const occ = seats[id];
+        const pos = [cx + Math.cos(a) * 1.5, 0, cz + Math.sin(a) * 1.5];
         seatMeshes.push(
-          <Seat key={id} position={[cx + Math.cos(a) * 1.5, 0, cz + Math.sin(a) * 1.5]}
+          <Seat key={id} position={pos}
             color={occ ? (occ.kind === 'me' ? guest.color.hex : '#d7bc75') : null}
             mine={occ?.kind === 'me'}
+            name={occ ? occ.name : null}
             baseColor="#5a4632" baseBack="#6b543a" />,
         );
+        if (!occ) seatMeshes.push(<EmptySeatRing key={`ring-${id}`} position={pos} />);
       }
     }
   }
@@ -251,6 +394,8 @@ function Auditorium({ room, seats, mySeat, guest, videoId }) {
           <WallLight position={[7.9, 3.2, 4]} />
         </>
       )}
+      {/* Trang trí sự kiện T1 vs BLG — chỉ Rạp phim, chỉ phần xung quanh */}
+      {EVENT_DECOR && !isSky && <EventDecor />}
       {/* Sân khấu Rạp Trời: bục gỗ nâng + đèn sân khấu */}
       {isSky && (
         <>
@@ -276,6 +421,13 @@ function Auditorium({ room, seats, mySeat, guest, videoId }) {
         </>
       )}
       <Screen videoId={videoId} isSky={isSky} />
+      {/* Video live trên mặt màn hình (chỉ góc toàn cảnh + tập trung màn hình —
+          góc ghế/góc ngược thì ẩn iframe, chỉ còn thumbnail nền, xem LiveScreen). */}
+      {showLive && (
+        <LiveScreen videoId={videoId} onEnded={onEnded} onPlayerReady={onPlayerReady}
+          controls={controls} startSeconds={startSeconds}
+          width={isSky ? 11 : 9} height={isSky ? 6 : 5} />
+      )}
       {/* Rèm nhung đỏ xếp ly: 2 bên + diềm trên màn hình (rạp phim) */}
       {!isSky && (
         <>
@@ -311,12 +463,14 @@ function Auditorium({ room, seats, mySeat, guest, videoId }) {
   );
 }
 
-export default function Cinema3D({ room, seats, mySeat, guest, cameraPreset, videoId }) {
+export default function Cinema3D({ room, seats, mySeat, guest, cameraPreset, videoId, showLive, onEnded, onPlayerReady, controls, startSeconds }) {
   return (
     <Canvas camera={{ position: CAMERA_PRESETS[cameraPreset].pos, fov: 55 }}>
       <color attach="background" args={[room.kind === 'sky' ? '#0a1220' : '#05070a']} />
       <Rig preset={cameraPreset} />
-      <Auditorium room={room} seats={seats} mySeat={mySeat} guest={guest} videoId={videoId} />
+      <Auditorium room={room} seats={seats} mySeat={mySeat} guest={guest} videoId={videoId}
+        showLive={showLive} onEnded={onEnded} onPlayerReady={onPlayerReady}
+        controls={controls} startSeconds={startSeconds} />
     </Canvas>
   );
 }

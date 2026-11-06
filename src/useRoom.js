@@ -208,6 +208,6 @@ export function useRoom(roomId, guestName, resumeVideo) {
   return {
     room, seats, mySeat, pickSeat, queue, current, voted, vote, addToQueue,
     messages, sendMessage, botSay, skipVoted, voteSkip, skipCount, skipThreshold,
-    occupiedCount, advanceToNext,
+    realCount, occupiedCount, advanceToNext,
   };
 }
