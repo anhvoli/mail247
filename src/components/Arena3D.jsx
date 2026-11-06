@@ -44,14 +44,18 @@ export const ARENA_CAMERA_PRESETS = {
   reverse: { label: 'Từ màn chiếu về hàng ghế', pos: [0, 5.5, -12], look: [0, 2.5, 12] },
 };
 
-function Rig({ preset }) {
+function Rig({ preset, reAim }) {
   const camera = useThree((s) => s.camera);
   useEffect(() => {
     const p = ARENA_CAMERA_PRESETS[preset];
     camera.position.set(p.pos[0], p.pos[1], p.pos[2]);
     camera.lookAt(p.look[0], p.look[1], p.look[2]);
     camera.updateProjectionMatrix();
-  }, [preset, camera]);
+    // reAim đổi mỗi lần bấm nút góc (kể cả bấm lại góc đang chọn) hoặc ngồi
+    // xuống ghế sau khi đi lại — vì AvatarWalk chỉnh camera trực tiếp nên
+    // chỉ đổi preset mới ngắm lại được, bấm lại góc cũ là state no-op và
+    // camera kẹt ở vị trí đi lại (fix 07/11 ~00:30).
+  }, [preset, camera, reAim]);
   return null;
 }
 
@@ -541,7 +545,7 @@ function Arena({ room, seats, mySeat, guest, videoId, showLive, onEnded, onPlaye
   );
 }
 
-export default function Arena3D({ room, seats, mySeat, guest, cameraPreset, videoId, showLive, onEnded, onPlayerReady, controls, startSeconds, onPickSeat }) {
+export default function Arena3D({ room, seats, mySeat, guest, cameraPreset, videoId, showLive, onEnded, onPlayerReady, controls, startSeconds, onPickSeat, reAim }) {
   // Đang đi lại thì ẩn hình người ngồi của khách trên ghế (xem Arena).
   const [walking, setWalking] = useState(false);
   // Bảng tên chỉ hiện ở góc toàn cảnh + tập trung màn hình — ở góc ghế/góc
@@ -550,7 +554,7 @@ export default function Arena3D({ room, seats, mySeat, guest, cameraPreset, vide
   return (
     <Canvas dpr={[1, 1.5]} camera={{ position: ARENA_CAMERA_PRESETS[cameraPreset].pos, fov: 55 }}>
       <color attach="background" args={['#05070a']} />
-      <Rig preset={cameraPreset} />
+      <Rig preset={cameraPreset} reAim={reAim} />
       <AvatarWalk room={room} seats={seats} guest={guest} mySeat={mySeat}
         cameraPreset={cameraPreset} onPickSeat={onPickSeat} onWalkChange={setWalking} />
       <Arena room={room} seats={seats} mySeat={mySeat} guest={guest} videoId={videoId}

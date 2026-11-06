@@ -25,14 +25,18 @@ export const CAMERA_PRESETS = {
 // từng frame — đổi góc phải tức thì và xác định, không phụ thuộc trạng thái
 // lerp cũ hay số frame đã chạy). Canvas không bao giờ bị unmount/thay thế
 // khi đổi góc; chỉ có camera di chuyển.
-function Rig({ preset }) {
+function Rig({ preset, reAim }) {
   const camera = useThree((s) => s.camera);
   useEffect(() => {
     const p = CAMERA_PRESETS[preset];
     camera.position.set(p.pos[0], p.pos[1], p.pos[2]);
     camera.lookAt(p.look[0], p.look[1], p.look[2]);
     camera.updateProjectionMatrix();
-  }, [preset, camera]);
+    // reAim đổi mỗi lần bấm nút góc (kể cả bấm lại góc đang chọn) hoặc ngồi
+    // xuống ghế sau khi đi lại — vì AvatarWalk chỉnh camera trực tiếp nên
+    // chỉ đổi preset mới ngắm lại được, bấm lại góc cũ là state no-op và
+    // camera kẹt ở vị trí đi lại (fix 07/11 ~00:30).
+  }, [preset, camera, reAim]);
   return null;
 }
 
@@ -478,7 +482,7 @@ function Auditorium({ room, seats, mySeat, guest, videoId, showLive, onEnded, on
   );
 }
 
-export default function Cinema3D({ room, seats, mySeat, guest, cameraPreset, videoId, showLive, onEnded, onPlayerReady, controls, startSeconds, onPickSeat }) {
+export default function Cinema3D({ room, seats, mySeat, guest, cameraPreset, videoId, showLive, onEnded, onPlayerReady, controls, startSeconds, onPickSeat, reAim }) {
   // Đang đi lại thì ẩn hình người ngồi của khách trên ghế (xem Auditorium).
   const [walking, setWalking] = useState(false);
   // Bảng tên (drei Html distanceFactor) chỉ hiện ở góc toàn cảnh + tập trung
@@ -488,7 +492,7 @@ export default function Cinema3D({ room, seats, mySeat, guest, cameraPreset, vid
   return (
     <Canvas camera={{ position: CAMERA_PRESETS[cameraPreset].pos, fov: 55 }}>
       <color attach="background" args={[room.kind === 'sky' ? '#0a1220' : '#05070a']} />
-      <Rig preset={cameraPreset} />
+      <Rig preset={cameraPreset} reAim={reAim} />
       <AvatarWalk room={room} seats={seats} guest={guest} mySeat={mySeat}
         cameraPreset={cameraPreset} onPickSeat={onPickSeat} onWalkChange={setWalking} />
       <Auditorium room={room} seats={seats} mySeat={mySeat} guest={guest} videoId={videoId}

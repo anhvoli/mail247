@@ -23,14 +23,16 @@ export const KARAOKE_CAMERA_PRESETS = {
 
 // Đổi góc camera: đặt thẳng vị trí + hướng nhìn khi đổi preset (không lerp),
 // canvas không bao giờ bị unmount/thay thế khi đổi góc.
-function Rig({ preset }) {
+function Rig({ preset, reAim }) {
   const camera = useThree((s) => s.camera);
   useEffect(() => {
     const p = KARAOKE_CAMERA_PRESETS[preset];
     camera.position.set(p.pos[0], p.pos[1], p.pos[2]);
     camera.lookAt(p.look[0], p.look[1], p.look[2]);
     camera.updateProjectionMatrix();
-  }, [preset, camera]);
+    // reAim đổi mỗi lần bấm nút góc (kể cả bấm lại góc đang chọn) hoặc ngồi
+    // xuống ghế sau khi đi lại (fix 07/11 ~00:30 — xem Cinema3D.jsx).
+  }, [preset, camera, reAim]);
   return null;
 }
 
@@ -312,11 +314,11 @@ function Stage({ room, seats, mySeat, guest, videoId, showLive, onEnded, onPlaye
   );
 }
 
-export default function Karaoke3D({ room, seats, mySeat, guest, cameraPreset, videoId, showLive, onEnded, onPlayerReady, controls, startSeconds, singerName, averageScore, scorerCount }) {
+export default function Karaoke3D({ room, seats, mySeat, guest, cameraPreset, videoId, showLive, onEnded, onPlayerReady, controls, startSeconds, singerName, averageScore, scorerCount, reAim }) {
   return (
     <Canvas camera={{ position: KARAOKE_CAMERA_PRESETS[cameraPreset].pos, fov: 55 }}>
       <color attach="background" args={['#0a0505']} />
-      <Rig preset={cameraPreset} />
+      <Rig preset={cameraPreset} reAim={reAim} />
       <Stage room={room} seats={seats} mySeat={mySeat} guest={guest} videoId={videoId}
         showLive={showLive} onEnded={onEnded} onPlayerReady={onPlayerReady}
         controls={controls} startSeconds={startSeconds}

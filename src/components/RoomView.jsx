@@ -150,6 +150,17 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
   const [camera, setCamera] = useState('overview');
   const [controlsOn, setControlsOn] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  // Số lần ngắm lại camera (fix 07/11 ~00:30): AvatarWalk chỉnh camera trực
+  // tiếp nên Rig chỉ ngắm lại khi preset đổi — bấm lại góc đang chọn là
+  // state no-op, ngồi xuống ghế sau khi đi lại cũng vậy, camera kẹt ở vị
+  // trí đi lại. Tăng số này mỗi lần bấm nút góc hoặc ngồi ghế để Rig ngắm
+  // lại đúng góc preset.
+  const [cameraNonce, setCameraNonce] = useState(0);
+  const prevSeatRef = useRef(mySeat);
+  useEffect(() => {
+    if (mySeat && prevSeatRef.current !== mySeat) setCameraNonce((n) => n + 1);
+    prevSeatRef.current = mySeat;
+  }, [mySeat]);
   // Thời gian phát hiện tại CHỈ ghi vào ref (poll player mỗi giây): trước đây
   // setPlayhead mỗi giây làm RoomView render lại toàn bộ — kể cả Canvas R3F
   // và toàn bộ cảnh 3D — nên phòng bị giật mỗi giây. Giờ interval chỉ ghi
@@ -192,15 +203,16 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
       try {
         const dur = p.getDuration ? p.getDuration() : 0;
         const cur = p.getCurrentTime ? p.getCurrentTime() : 0;
-        // Chỉ ghi giờ khi player đang giữ đúng bài đang chiếu: lúc chuyển
-        // bài player còn trả thời lượng của bài cũ, ghi bừa là panel hiện
-        // sai thời lượng (từng hiện 5:26 cho video đấu trường).
+        // Chỉ ghi giờ khi player đang giữ đúng bài đang chiếu VÀ đã chạy
+        // thật (cur > 0): lúc chuyển bài player còn trả thời lượng của bài
+        // cũ, ghi bừa là panel hiện sai thời lượng (từng hiện 5:26 cho
+        // video đấu trường); video lỗi kẹt ở 0:00 thì không ghi gì cả.
         let vid = currentIdRef.current;
         try {
           const vd = p.getVideoData && p.getVideoData();
           if (vd && vd.video_id) vid = vd.video_id;
         } catch { /* API cũ không có getVideoData */ }
-        if (dur > 0 && vid === currentIdRef.current) playheadRef.current = { cur, dur, vid };
+        if (dur > 0 && cur > 0 && vid === currentIdRef.current) playheadRef.current = { cur, dur, vid };
       } catch { /* player chưa sẵn / đã hủy */ }
     }, 1000);
     return () => clearInterval(t);
@@ -229,12 +241,12 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
       showLive: camera === 'overview' || camera === 'screen',
       onEnded: handleEnded, onPlayerReady: handlePlayerReady,
       controls: controlsOn, startSeconds: playheadRef.current.vid === current.id ? Math.floor(playheadRef.current.cur) : 0,
-      onPickSeat: handlePickSeat,
+      onPickSeat: handlePickSeat, reAim: cameraNonce,
     };
     return room.kind === 'karaoke'
       ? <Karaoke3D {...common} singerName={singerName} averageScore={averageScore} scorerCount={scorerCount} />
       : room.kind === 'arena' ? <Arena3D {...common} /> : <Cinema3D {...common} />;
-  }, [room, seats, mySeat, guest, camera, current.id, controlsOn, handleEnded, handlePlayerReady, handlePickSeat, singerName, averageScore, scorerCount]);
+  }, [room, seats, mySeat, guest, camera, current.id, controlsOn, handleEnded, handlePlayerReady, handlePickSeat, singerName, averageScore, scorerCount, cameraNonce]);
 
   const showToast = (text, ms = 3500) => {
     setToast(text);
@@ -369,7 +381,7 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
             <RightRail queueCount={queue.length}
               onTab={setTab} onToast={(t) => showToast(t)} gestureRowRef={gestureRowRef} />
             {camera === 'screen' && (
-              <button className="focus-exit" onClick={() => setCamera('overview')}>
+              <button className="focus-exit" onClick={() => { setCamera('overview'); setCameraNonce((n) => n + 1); }}>
                 ✕ Thoát góc tập trung màn hình
               </button>
             )}
@@ -380,7 +392,7 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
             <span><b>Đang chiếu:</b> {current.title} · {current.by}</span>
             <span className="cam-btns">
               {Object.entries(PRESETS).map(([key, p]) => (
-                <button key={key} className={camera === key ? 'on' : ''} onClick={() => setCamera(key)}>{p.label}</button>
+                <button key={key} className={camera === key ? 'on' : ''} onClick={() => { setCamera(key); setCameraNonce((n) => n + 1); }}>{p.label}</button>
               ))}
             </span>
             <span className="cam-btns">

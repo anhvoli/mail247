@@ -106,6 +106,12 @@ export default function YouTubePlayer({ videoId, onEnded, onPlayerReady, control
   const consecutiveErrorsRef = useRef(0);
   const autoSkipStoppedRef = useRef(false);
   const lastErrorVideoRef = useRef(null);
+  // Video đã phát được thật hay chưa (fix 07/11 ~00:30): YouTube báo state
+  // ENDED (0) cho cả video LỖI/không phát được — nên chỉ chặn onError thôi
+  // chưa đủ, watchdog và onStateChange ENDED vẫn tự chuyển bài mỗi giây
+  // làm giao diện nhảy. Chỉ cho chuyển bài khi video đã từng phát thật
+  // (state playing hoặc đã chạy quá 2s); đổi video thì reset lại.
+  const playedRef = useRef(false);
 
   // Bắn onEnded tối đa 1 lần cho mỗi video (tránh watchdog + onStateChange
   // cùng bắn, hoặc poll liên tục bắn khi video đã hết).
@@ -208,7 +214,9 @@ export default function YouTubePlayer({ videoId, onEnded, onPlayerReady, control
         events: {
           onReady: (e) => handleReady(e.target),
           onStateChange: (e) => {
-            if (e.data === YT.PlayerState.ENDED) fireEnded();
+            // Chỉ chuyển bài khi video đã từng phát thật — video lỗi cũng
+            // báo ENDED, để lọt là lại nhảy bài mỗi giây (xem playedRef).
+            if (e.data === YT.PlayerState.ENDED && playedRef.current) fireEnded();
           },
           onError: () => handlePlayerError(),
         },
@@ -242,7 +250,7 @@ export default function YouTubePlayer({ videoId, onEnded, onPlayerReady, control
               events: {
                 onReady: (e) => handleReady(e.target),
                 onStateChange: (e) => {
-                  if (e.data === window.YT.PlayerState.ENDED) fireEnded();
+                  if (e.data === window.YT.PlayerState.ENDED && playedRef.current) fireEnded();
                 },
                 onError: () => handlePlayerError(),
               },
@@ -281,6 +289,7 @@ export default function YouTubePlayer({ videoId, onEnded, onPlayerReady, control
     videoIdRef.current = videoId;
     endedFiredForRef.current = null; // video mới: cho phép bắn ENDED lại
     lastErrorVideoRef.current = null; // video mới: tính lỗi lại từ đầu
+    playedRef.current = false; // video mới: chưa phát được, chưa cho chuyển bài
     lastTimeRef.current = 0;
     const p = playerRef.current;
     if (p && p.loadVideoById) {
@@ -305,21 +314,24 @@ export default function YouTubePlayer({ videoId, onEnded, onPlayerReady, control
   // Đồng thời đây là bằng chứng "video phát được thật": đang phát (state 1)
   // hoặc đã chạy quá 2s thì reset bộ đếm lỗi liên tiếp về 0 — chuỗi lỗi
   // chỉ tính khi video chưa từng phát được, để vòng lặp tự bỏ qua không
-  // bao giờ chạy khi video phát bình thường.
+  // bao giờ chạy khi video phát bình thường. Nhánh state===0 CHỈ chuyển bài
+  // khi video đã từng phát thật: video lỗi cũng báo ENDED, không chặn là
+  // watchdog tự chuyển bài mỗi giây làm giao diện nhảy (xem playedRef).
   useEffect(() => {
     const t = setInterval(() => {
       const p = playerRef.current;
       if (!p) return;
       try {
         const state = p.getPlayerState ? p.getPlayerState() : -1;
-        if (state === 0) { fireEnded(); return; }
         const dur = p.getDuration ? p.getDuration() : 0;
         const cur = p.getCurrentTime ? p.getCurrentTime() : 0;
         if (dur > 0) lastTimeRef.current = Math.floor(cur);
         if (state === 1 || (dur > 0 && cur > 2)) {
+          playedRef.current = true;
           consecutiveErrorsRef.current = 0;
           autoSkipStoppedRef.current = false;
         }
+        if (state === 0) { if (playedRef.current) fireEnded(); return; }
         if (dur > 0 && cur >= dur - 0.75) fireEnded();
       } catch { /* player chưa sẵn */ }
     }, 1000);
