@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import Cinema3D, { CAMERA_PRESETS } from './Cinema3D';
+import ErrorBoundary from './ErrorBoundary';
 import SeatMap from './SeatMap';
 import YouTubePlayer from '../youtube';
 import { EMOJI_GROUPS, GESTURES, MISSIONS } from '../data';
@@ -108,11 +109,19 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
       <div className="main">
         <div className={`stage ${camera === 'screen' ? 'focus-screen' : ''}`} ref={stageRef}>
           <div className="view3d">
-            <Cinema3D room={room} seats={seats} mySeat={mySeat} guest={guest} cameraPreset={camera} videoId={current.id} />
+            {/* Canvas 3D không bao giờ bị unmount/thay thế khi đổi góc camera
+                (chỉ camera di chuyển — xem Rig trong Cinema3D.jsx); bọc thêm
+                ErrorBoundary để lỗi WebGL chỉ hiện khung báo lỗi tại chỗ. */}
+            <ErrorBoundary>
+              <Cinema3D room={room} seats={seats} mySeat={mySeat} guest={guest} cameraPreset={camera} videoId={current.id} />
+            </ErrorBoundary>
             <span className="cam-label">{CAMERA_PRESETS[camera].label}</span>
           </div>
           <div className="player-wrap">
-            <YouTubePlayer key={current.nonce} videoId={current.id}
+            {/* Không dùng key={current.nonce} nữa: đổi bài thì player nạp bài
+                mới bằng loadVideoById, giữ nguyên instance (và handler ENDED)
+                thay vì hủy + tạo lại toàn bộ player mỗi lần đổi bài. */}
+            <YouTubePlayer videoId={current.id}
               onEnded={advanceToNext} onPlayerReady={(p) => { playerRef.current = p; }}
               controls={controlsOn} />
             {camera === 'screen' && (
@@ -161,7 +170,14 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
               <div className="skip-box">
                 Vote bỏ qua: {skipCount}/{skipThreshold} người thật · Đủ 30% thì chuyển bài.
                 <br />
-                <button className="btn ghost" style={{ marginTop: 8 }} disabled={skipVoted} onClick={voteSkip}>
+                <button className="btn ghost" style={{ marginTop: 8 }} disabled={skipVoted} onClick={() => {
+                  voteSkip();
+                  // Hiện rõ 1/1 ngay khi vote: round 1 chờ có 600ms là đổi bài
+                  // và reset counter về 0/1, nên người bấm không bao giờ thấy
+                  // vote của mình được ghi (nay chờ 2 giây mới chuyển bài).
+                  setToast(`Đã ghi nhận vote bỏ qua (${skipThreshold}/${skipThreshold}) — chuyển bài sau 2 giây…`);
+                  setTimeout(() => setToast(''), 2500);
+                }}>
                   {skipVoted ? 'Đã vote bỏ qua ✓' : 'Vote bỏ qua bài này'}
                 </button>
               </div>

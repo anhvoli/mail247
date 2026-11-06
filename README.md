@@ -44,10 +44,23 @@ npm run preview  # xem thử bản build
   video đang chạy lấp đầy khung hình — đó là video thật, không phải ảnh.
 - **Tự động chuyển bài:** trình phát dùng **YouTube IFrame Player API**,
   bắt sự kiện `onStateChange` với `YT.PlayerState.ENDED` để chuyển sang bài
-  nhiều vote nhất. Không dùng timer đoán thời lượng. Nếu API của YouTube
-  không tải được (mạng chặn), trình phát fallback sang iframe nhúng thường
-  và tính năng tự chuyển bài khi hết video sẽ không hoạt động — xem console
-  để biết.
+  nhiều vote nhất — và có **watchdog dự phòng** poll `getPlayerState()` /
+  `getCurrentTime()` mỗi giây, nên hết bài vẫn chuyển ngay cả khi sự kiện
+  ENDED bị lỡ. API nạp lại được nếu tải chậm (tối đa 3 lượt, không "chết"
+  vĩnh viễn sau 1 lần timeout như round 1); nếu API vẫn chưa tải được,
+  trình phát dùng iframe thường có `enablejsapi=1` rồi **tự nâng cấp thành
+  player API** khi `window.YT` xuất hiện. Player được tạo trên 1 div tạo
+  bằng tay trong container do React sở hữu (không có con React nào) nên
+  YouTube thay div bằng iframe cũng không làm lệch DOM của React — đổi bài
+  chỉ nạp bằng `loadVideoById`, giữ nguyên instance và handler ENDED, không
+  hủy + tạo lại player mỗi lần đổi bài.
+- **Vote bỏ qua:** bấm là counter hiện **1/1** ngay (kèm thông báo), chờ
+  2 giây mới chuyển bài rồi reset về 0/1 cho bài mới. Thẻ “Đang chiếu” ở
+  sảnh lấy từ bài đang phát thật của từng phòng, và vào lại phòng thì tiếp
+  tục bài đó. **Phạm vi thật:** bản source này giữ vote trong state của
+  trình duyệt thôi — vote không lưu qua lần tải lại trang và không thấy
+  được ở trình duyệt khác; muốn vote chung nhiều người thì cần bản server
+  (bản artifact fullstack). Không giả vờ có đồng bộ.
 - **Nút “Hiện/Ẩn điều khiển trình phát”** nằm trong thanh controls dưới
   player (không bị iframe đè, có z-index riêng nên luôn bấm được). YouTube
   API không cho đổi `controls` trực tiếp nên khi bấm, player sẽ tạo lại từ
@@ -55,7 +68,13 @@ npm run preview  # xem thử bản build
 - **Hàng đợi chống trùng:** không thêm được video đã có trong hàng đợi hoặc
   đang chiếu (so theo video ID); hàng đợi mẫu của Rạp phim không còn 2 bản
   của cùng 1 bài Sơn Tùng nữa (bản Audio đã thay bằng MV Quang Đăng Trần
-  “Anh Đã Không Biết Cách Yêu Em”, `OKjhlW1MveM`, 4:06).
+  “Anh Đã Không Biết Cách Yêu Em”, `OKjhlW1MveM`, **4:44** — theo đúng
+  thời lượng trình phát báo).
+- **Camera:** đổi góc là đặt thẳng vị trí + hướng nhìn của camera R3F
+  (không lerp từng frame), Canvas không bao giờ bị unmount/thay thế khi đổi
+  góc; chỉ góc “Tập trung màn hình” mới phủ trình phát thật lên vùng rạp 3D,
+  thoát góc đó là canvas hiện lại y như cũ. Lỗi WebGL/player được chặn bằng
+  ErrorBoundary nên không bao giờ đen cả trang.
 - **Thumbnail hàng đợi** có fallback: lỗi `default.jpg` thì thử `mqdefault.jpg`,
   vẫn lỗi thì hiện ô placeholder 🎬 thay vì ảnh vỡ.
 
@@ -72,7 +91,7 @@ npm run preview  # xem thử bản build
   màn hình hiển thị thumbnail video đang chiếu, rèm nhung đỏ xếp ly 2 bên +
   diềm trên màn hình, 2 loa tháp lớn có loa tròn 2 bên màn hình, quả cầu disco
   treo cao trước màn hình (không che mặt màn hình), đèn tường ấm 2 bên, ghế +
-  avatar ngồi trên ghế, camera lerp mượt giữa 4 góc preset (góc “từ màn chiếu
+  avatar ngồi trên ghế, camera đặt thẳng theo 4 góc preset (góc “từ màn chiếu
   về hàng ghế” đứng trước mặt màn hình nên nhìn rõ khán giả). Rạp Trời có bục
   sân khấu gỗ, màn LED lớn hơn, bàn tròn gỗ sáng màu, trăng + sao. Không phải
   ảnh tĩnh giả 3D.

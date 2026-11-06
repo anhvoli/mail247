@@ -1,6 +1,6 @@
 import { ROOMS, LV_EXP } from '../data';
 
-export default function Lobby({ guest, exp, onEnterRoom, onLeave }) {
+export default function Lobby({ guest, exp, nowPlayingByRoom, onEnterRoom, onLeave }) {
   const level = Math.floor(exp / LV_EXP) + 1;
   const progress = exp % LV_EXP;
   return (
@@ -26,7 +26,10 @@ export default function Lobby({ guest, exp, onEnterRoom, onLeave }) {
             <h2 style={{ marginTop: 10 }}>{room.name}</h2>
             <p>{room.kind === 'cinema' ? 'Rạp 3D tối, rèm đỏ, màn hình lớn — xem MV cùng cả rạp.' : 'Rạp ngoài trời ban đêm: trăng, đồi, cây thông, bàn tròn, màn LED.'}</p>
             <p className="count">~{room.botCount} người đang online · {room.totalSeats} ghế</p>
-            <p>Đang chiếu: {room.nowPlaying.title}</p>
+            {/* "Đang chiếu" lấy từ bài đang phát thật của phòng (App ghi lại mỗi
+                lần đổi bài) — sau vote bỏ qua hay hết bài tự chuyển, thẻ sảnh
+                cũng đổi theo; chưa vào phòng lần nào thì hiện bài mẫu. */}
+            <p>Đang chiếu: {nowPlayingByRoom?.[room.id]?.title || room.nowPlaying.title}</p>
           </button>
         ))}
         <div className="room-card phase2">

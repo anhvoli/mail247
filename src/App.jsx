@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import GuestSetup from './components/GuestSetup';
 import Lobby from './components/Lobby';
 import RoomView from './components/RoomView';
+import ErrorBoundary from './components/ErrorBoundary';
 import { useRoom } from './useRoom';
 import { BOT_CHAT_LINES, BOT_NAMES } from './data';
 
@@ -24,9 +25,26 @@ export default function App() {
   });
   const [expState, setExpState] = useState(loadExp);
   const [roomId, setRoomId] = useState(null);
-  const roomState = useRoom(roomId || 'phim', guest?.name || 'Khách');
+  // Bài đang chiếu thật của từng phòng (ghi lại mỗi lần đổi bài) — để thẻ
+  // "Đang chiếu" ở sảnh luôn khớp với bài đang phát, và vào lại phòng thì
+  // tiếp tục bài đó thay vì quay về bài mẫu.
+  const [liveNowPlaying, setLiveNowPlaying] = useState({});
+  const roomState = useRoom(roomId || 'phim', guest?.name || 'Khách', roomId ? liveNowPlaying[roomId] : null);
   const roomStateRef = useRef(roomState);
   roomStateRef.current = roomState;
+
+  useEffect(() => {
+    if (!roomId) return;
+    const cur = roomState.current;
+    setLiveNowPlaying((prev) => {
+      const old = prev[roomId];
+      if (old && old.id === cur.id) return prev;
+      return { ...prev, [roomId]: { id: cur.id, title: cur.title, by: cur.by, duration: cur.duration } };
+    });
+    // Chỉ chạy khi đổi phòng hoặc đổi bài (roomState.current đổi tham chiếu
+    // chỉ khi setCurrent chạy) — không phụ thuộc cả object roomState.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomId, roomState.current]);
 
   useEffect(() => { localStorage.setItem(EXP_KEY, JSON.stringify(expState)); }, [expState]);
 
@@ -77,17 +95,21 @@ export default function App() {
 
   if (!guest) return <GuestSetup onEnter={enterGuest} />;
   if (!roomId) {
-    return <Lobby guest={guest} exp={expState.exp} onEnterRoom={setRoomId} onLeave={() => { setGuest(null); localStorage.removeItem(GUEST_KEY); }} />;
+    return <Lobby guest={guest} exp={expState.exp} nowPlayingByRoom={liveNowPlaying} onEnterRoom={setRoomId} onLeave={() => { setGuest(null); localStorage.removeItem(GUEST_KEY); }} />;
   }
+  // ErrorBoundary ngoài cùng: lỗi ở rạp (Canvas WebGL, player) chỉ hiện
+  // khung báo lỗi + nút thử lại, không bao giờ đen cả trang.
   return (
-    <RoomView
-      guest={guest}
-      roomState={roomState}
-      onLeave={() => setRoomId(null)}
-      exp={expState.exp}
-      missionsDone={{ ...expState.missions, chatReady: expState.chatReady }}
-      onMissionDone={claimMission}
-      onChatSent={onChatSent}
-    />
+    <ErrorBoundary>
+      <RoomView
+        guest={guest}
+        roomState={roomState}
+        onLeave={() => setRoomId(null)}
+        exp={expState.exp}
+        missionsDone={{ ...expState.missions, chatReady: expState.chatReady }}
+        onMissionDone={claimMission}
+        onChatSent={onChatSent}
+      />
+    </ErrorBoundary>
   );
 }

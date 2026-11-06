@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
+import { useEffect, useState } from 'react';
+import { Canvas, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { seatId } from '../data';
 
@@ -13,16 +13,18 @@ export const CAMERA_PRESETS = {
   reverse: { label: 'Từ màn chiếu về hàng ghế', pos: [0, 2.6, -6.2], look: [0, 1.0, 10] },
 };
 
+// Đổi góc camera: đặt thẳng vị trí + hướng nhìn khi đổi preset (không lerp
+// từng frame — đổi góc phải tức thì và xác định, không phụ thuộc trạng thái
+// lerp cũ hay số frame đã chạy). Canvas không bao giờ bị unmount/thay thế
+// khi đổi góc; chỉ có camera di chuyển.
 function Rig({ preset }) {
-  const target = useMemo(() => new THREE.Vector3(...CAMERA_PRESETS[preset].pos), [preset]);
-  const look = useMemo(() => new THREE.Vector3(...CAMERA_PRESETS[preset].look), [preset]);
-  useFrame((state, dt) => {
+  const camera = useThree((s) => s.camera);
+  useEffect(() => {
     const p = CAMERA_PRESETS[preset];
-    target.lerp(new THREE.Vector3(...p.pos), 1 - Math.pow(0.001, dt));
-    look.lerp(new THREE.Vector3(...p.look), 1 - Math.pow(0.001, dt));
-    state.camera.position.copy(target);
-    state.camera.lookAt(look);
-  });
+    camera.position.set(p.pos[0], p.pos[1], p.pos[2]);
+    camera.lookAt(p.look[0], p.look[1], p.look[2]);
+    camera.updateProjectionMatrix();
+  }, [preset, camera]);
   return null;
 }
 

@@ -31,7 +31,7 @@ function seedSeats(room) {
   return seats;
 }
 
-export function useRoom(roomId, guestName) {
+export function useRoom(roomId, guestName, resumeVideo) {
   const room = ROOMS[roomId];
   const [seats, setSeats] = useState(() => seedSeats(room));
   const [mySeat, setMySeat] = useState(null);
@@ -44,8 +44,15 @@ export function useRoom(roomId, guestName) {
   ]);
   const msgId = useRef(2);
 
+  // Video đang chiếu của phòng này (để mở lại phòng thì tiếp tục bài đó thay
+  // vì quay về bài mẫu) — App ghi nhớ từ lần vào phòng trước.
+  const resumeVideoRef = useRef(resumeVideo);
+  useEffect(() => { resumeVideoRef.current = resumeVideo; }, [resumeVideo]);
+
   // Mỗi phòng có state riêng: đổi phòng là reset toàn bộ (ghế, hàng đợi, video
-  // đang chiếu, vote, chat) về trạng thái gốc của phòng đó.
+  // đang chiếu, vote, chat) về trạng thái gốc của phòng đó — riêng video đang
+  // chiếu thì tiếp tục bài đã nhớ (nếu có) để thẻ "Đang chiếu" ở sảnh khớp
+  // với bài sẽ phát khi vào lại phòng.
   const roomIdRef = useRef(roomId);
   useEffect(() => {
     if (roomIdRef.current === roomId) return;
@@ -54,7 +61,9 @@ export function useRoom(roomId, guestName) {
     setSeats(seedSeats(r));
     setMySeat(null);
     setQueue(r.queue.map((q) => ({ ...q })));
-    setCurrent({ ...r.nowPlaying, nonce: 0 });
+    setCurrent(resumeVideoRef.current
+      ? { ...resumeVideoRef.current, nonce: 0 }
+      : { ...r.nowPlaying, nonce: 0 });
     setVoted(new Set());
     setSkipVotes(0);
     msgId.current = 2;
@@ -98,6 +107,17 @@ export function useRoom(roomId, guestName) {
   useEffect(() => { queueRef.current = queue; }, [queue]);
   const currentRef = useRef(current);
   useEffect(() => { currentRef.current = current; }, [current]);
+
+  // Mở lại phòng thì tiếp tục bài đã nhớ (App ghi lại mỗi lần đổi bài).
+  // Cần effect riêng ngoài reset-effect vì đường sảnh → Rạp phim không đổi
+  // roomId của hook (lúc ở sảnh hook đã chạy với 'phim'), nên reset-effect
+  // không chạy lại — chỉ có resumeVideo đổi thì mới khôi phục được bài.
+  useEffect(() => {
+    if (resumeVideo && resumeVideo.id !== currentRef.current.id) {
+      setCurrent({ ...resumeVideo, nonce: 0 });
+      setSkipVotes(0);
+    }
+  }, [resumeVideo]);
 
   const advanceToNext = useCallback(() => {
     const q = queueRef.current;
@@ -169,11 +189,21 @@ export function useRoom(roomId, guestName) {
     setSkipVotes((v) => (v > 0 ? v : v + 1));
   }, []);
 
+  // Chuyển bài 2 giây sau khi đủ vote (round 1 chỉ chờ 600ms nên trạng thái
+  // 1/1 gần như không bao giờ nhìn thấy được: vote xong là bài đã đổi và
+  // counter reset về 0/1 cho bài mới, trông như vote chưa từng được ghi).
+  // Hẹn này bị hủy nếu đổi phòng trong lúc chờ (deps có roomId), và callback
+  // kiểm tra lại phòng hiện tại trước khi chuyển — không chuyển bài nhầm
+  // sang phòng mới sau khi đã rời phòng cũ (round 2 từng đen trang khi
+  // rời phòng ngay sau vote).
   useEffect(() => {
     if (skipVotes <= 0 || skipVotes < skipThreshold) return undefined;
-    const t = setTimeout(() => advanceRef.current(), 600);
+    const targetRoom = roomId;
+    const t = setTimeout(() => {
+      if (roomIdRef.current === targetRoom) advanceRef.current();
+    }, 2000);
     return () => clearTimeout(t);
-  }, [skipVotes, skipThreshold]);
+  }, [skipVotes, skipThreshold, roomId]);
 
   return {
     room, seats, mySeat, pickSeat, queue, current, voted, vote, addToQueue,
