@@ -140,7 +140,19 @@ export default function App() {
   const roomStateRef = useRef(roomState);
   roomStateRef.current = roomState;
 
+  // Phòng cuối mà effect đồng bộ đã thấy — để bỏ qua lần đồng bộ đầu tiên
+  // sau mỗi lần đổi phòng (xem effect bên dưới).
+  const prevSyncRoomRef = useRef(roomId);
   useEffect(() => {
+    // Bỏ qua lần chạy đầu sau khi đổi phòng (kể cả từ sảnh vào): ở lần chạy
+    // này roomState.current vẫn là bài của phòng TRƯỚC — reset effect của
+    // useRoom chạy cùng commit nhưng setCurrent chỉ có hiệu lực ở lần render
+    // sau. Đồng bộ lúc này là ghi nhầm bài phòng cũ vào liveNowPlaying của
+    // phòng mới, rồi resume effect áp lại làm bài đang chiếu nhảy qua lại
+    // (fix 07/11 ~00:45: Rạp Trời mở ra đã là bài Sơn Tùng của Rạp phim, rồi
+    // nhảy Thêm ↔ Sơn Tùng 6 lần/phút trên bản live). Lần chạy sau, khi
+    // current đã là bài của phòng mới, mới đồng bộ.
+    if (prevSyncRoomRef.current !== roomId) { prevSyncRoomRef.current = roomId; return; }
     if (!roomId || roomId === 'sanh') return;
     const cur = roomState.current;
     // Chỉ đồng bộ bài thuộc đúng phòng này: lúc vừa đổi phòng, roomState
