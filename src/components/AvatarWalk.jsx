@@ -344,10 +344,14 @@ export default function AvatarWalk({ room, seats, guest, mySeat, cameraPreset, o
         <boxGeometry args={[0.16, 0.05, 0.06]} />
         <meshStandardMaterial color="#222222" />
       </mesh>
-      {/* Bảng tên trên đầu (cùng kiểu .nametag như người ngồi) */}
-      <Html position={[0, 1.95, 0]} center distanceFactor={10} zIndexRange={[4, 0]} style={{ pointerEvents: 'none' }}>
-        <div className="nametag">{guest?.name || 'Khách'}</div>
-      </Html>
+      {/* Bảng tên trên đầu — chỉ hiện ở góc toàn cảnh + tập trung màn hình:
+          ở góc ghế camera sát người nên tên phình to ~200px che giữa màn
+          hình (fix 07/11 ~00:35, giống bảng tên người ngồi). */}
+      {(cameraPreset === 'overview' || cameraPreset === 'screen') && (
+        <Html position={[0, 1.95, 0]} center distanceFactor={10} zIndexRange={[4, 0]} style={{ pointerEvents: 'none' }}>
+          <div className="nametag">{guest?.name || 'Khách'}</div>
+        </Html>
+      )}
       {/* Chip báo đang đi lại (chỉ khi đã bấm WASD / kéo chuột) */}
       {walking && (
         <Html fullscreen zIndexRange={[5, 0]} style={{ pointerEvents: 'none' }}>
