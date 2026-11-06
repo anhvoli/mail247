@@ -72,7 +72,7 @@ a { color: var(--lime); }
 .main { flex: 1; display: grid; grid-template-columns: 1fr 340px; min-height: 0; }
 @media (max-width: 900px) { .main { grid-template-columns: 1fr; } }
 .stage { display: flex; flex-direction: column; min-width: 0; background: #05070a; position: relative; }
-.view3d { height: 300px; border-bottom: 1px solid var(--line); position: relative; }
+.view3d { height: 300px; border-bottom: 1px solid var(--line); position: relative; overflow: hidden; }
 .view3d .cam-label { position: absolute; left: 10px; bottom: 10px; background: #000a; padding: 4px 10px; border-radius: 999px; font-size: 12px; z-index: 3; }
 .view3d canvas { display: block; }
 /* Panel "TRÊN MÀN ẢNH" (như bản gốc): đè góc trái khung 3D */
@@ -172,4 +172,100 @@ a { color: var(--lime); }
 .mission { border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 10px; background: var(--panel2); }
 .mission.done { opacity: .6; }
 .mission .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.mission small { color: var(--muted); }
+/* Nút thu gọn / mở panel "TRÊN MÀN ẢNH" (mặc định thu gọn trên điện thoại) */
+.now-playing.collapsed { padding: 0; background: transparent; border: none; max-width: calc(100% - 20px); }
+.np-toggle { background: #0d1117cc; border: 1px solid var(--line); color: var(--text); border-radius: 999px;
+  padding: 9px 14px; font-size: 13px; font-weight: 700; min-height: 40px; max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.np-collapse { position: absolute; top: 4px; right: 4px; background: none; border: none;
+  color: var(--muted); font-size: 14px; padding: 6px 10px; min-height: 32px; }
+.lobby-user { min-width: 220px; }
+
+/* ============ Mobile / responsive (điện thoại, màn hẹp) ============ */
+html, body { overflow-x: clip; }
+
+@media (max-width: 900px) {
+  /* Phòng chiếu: các khối xếp dọc, trang cuộn tự nhiên thay vì cột phải
+     bị kẹp trong khung 100% chiều cao (trước đây .side bị overflow:hidden). */
+  .room { height: auto; min-height: 100%; }
+  .main { display: flex; flex-direction: column; }
+  .side { border-left: none; border-top: 1px solid var(--line); overflow: visible; }
+  .side .panel { overflow: visible; }
+  /* Canvas 3D giữ chiều cao dùng được, không bị bẹp thành dải mỏng. */
+  .view3d { height: clamp(260px, 66vw, 320px); }
+}
+
+@media (max-width: 640px) {
+  /* --- Sảnh --- */
+  .lobby { padding: 20px 14px 48px; }
+  .lobby header { flex-direction: column; align-items: flex-start; }
+  .logo { font-size: 19px; }
+  .lobby-user { min-width: 0; width: 100%; }
+  .lobby-user .btn { min-height: 44px; }
+  .room-grid { grid-template-columns: 1fr; gap: 12px; }
+  .room-card { padding: 18px; }
+  .room-card h2 { font-size: 18px; }
+  .room-card p { overflow-wrap: break-word; }
+  .gate-card { padding: 20px; }
+  .gate-card h1 { font-size: 24px; }
+
+  /* --- Topbar: chip xuống dòng thay vì tràn --- */
+  .topbar { gap: 8px; padding: 8px 10px; }
+  .topbar b { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .topbar .chip { font-size: 12px; padding: 5px 10px; }
+  .topbar .spacer { display: none; }
+  .topbar .btn.ghost { min-height: 40px; padding: 8px 12px; }
+
+  /* --- Khung 3D: panel + thanh phải không che video --- */
+  .now-playing { max-width: min(320px, calc(100% - 20px)); padding: 8px 10px; }
+  .now-playing .title { font-size: 13px; padding-right: 26px; }
+  .now-playing .skip-btn { min-height: 40px; }
+  .view3d .cam-label { display: none; }
+  .wasd-hint { display: none; }
+  /* Thanh phải thành dải ngang dưới khung 3D, chỉ còn icon (đủ to để bấm). */
+  .rail { top: auto; bottom: 8px; left: 50%; right: auto; transform: translateX(-50%);
+    flex-direction: row; gap: 6px; }
+  .rail button { width: 44px; min-height: 44px; padding: 6px 2px; }
+  .rail button > span:not(.ic):not(.badge) { display: none; }
+  .rail button .ic { font-size: 20px; }
+
+  /* --- Điều khiển / điệu bộ / hàng đợi --- */
+  .controls button, .chip-btn { min-height: 40px; }
+  .controls .cam-btns { flex-wrap: wrap; flex: 1 1 100%; }
+  .controls .cam-btns button { flex: 1 1 calc(50% - 3px); }
+  .controls span { min-width: 0; }
+  .gesture-row button { font-size: 14px; padding: 10px 4px; }
+  .queue-item img, .thumb-fallback { width: 60px; }
+  .queue-item > div { min-width: 0; }
+  .queue-item .t { overflow-wrap: break-word; }
+  .tabs button { min-height: 44px; }
+
+  /* --- Sơ đồ ghế: ghế nhỏ lại, không cuộn ngang trang --- */
+  .seatmap { padding: 12px 10px; }
+  .seat { width: 26px; height: 26px; font-size: 9px; border-radius: 6px 6px 3px 3px; }
+  .seat.triple { width: 23px; }
+  .seat-row { gap: 4px; }
+  .seat-rows { gap: 4px; }
+  .row-label { width: 14px; font-size: 11px; }
+  /* Đấu trường: 24 ghế/vòng không nhét vừa màn hẹp nên vòng ghế gập thành
+     2 hàng 12 ghế — vẫn bấm được, trang không cuộn ngang. Nhãn vòng thành
+     1 dòng tiêu đề riêng thay vì chen ngang làm vỡ chữ "Vòng A". */
+  .seat-rows.arena { width: 100%; max-width: 100%; }
+  .seat-rows.arena .seat-row { flex-wrap: wrap; }
+  .seat-rows.arena .row-label { width: 100%; font-size: 12px; margin: 4px 0 2px; }
+}
+
+@media (max-width: 380px) {
+  .seat { width: 24px; height: 24px; }
+  .seat.triple { width: 21px; }
+}
+
+/* --- Karaoke: panel chấm điểm + ghi chú giờ mở cửa --- */
+.score-box { border: 1px solid var(--gold); border-radius: 10px; padding: 10px; margin-bottom: 12px; font-size: 13px; }
+.score-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.score-btn { min-width: 34px; min-height: 34px; border-radius: 8px; border: 1px solid var(--line); background: #141a26; color: var(--text); cursor: pointer; font-weight: 700; }
+.score-btn.on { border-color: #ffd75e; color: #ffd75e; }
+.score-btn:disabled { opacity: .45; cursor: default; }
+.hours-note { background: #2a2113; border: 1px solid #6b5518; color: #ffd75e; border-radius: 10px; padding: 8px 12px; font-size: 13px; margin-bottom: 12px; }
+/* Ghế Karaoke đỏ (sơ đồ 2D) — ghế trống đỏ đậm, ghế có người giữ màu chung. */
+.seat.karaoke-seat { border-color: #7a2a2a; background: #3a1414; }

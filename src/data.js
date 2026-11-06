@@ -1,7 +1,26 @@
 // Dữ liệu mẫu Phase 1 — lấy từ khảo sát choigivui.com ngày 2026-11-06.
-// Video ID đã kiểm chứng qua tìm kiếm YouTube:
+// Phòng Karaoke lấy từ src/karaoke-room-spec.js (đã kiểm chứng video qua oEmbed).
+import { KARAOKE_ROOM } from './karaoke-room-spec';
+// Video ID đã kiểm chứng:
 //  - abPmZCZZrFA: SƠN TÙNG M-TP | ĐỪNG LÀM TRÁI TIM ANH ĐAU | OFFICIAL MUSIC VIDEO (5:26)
+//    — đã phát thật nhiều lần trong kiểm tra live (Rạp phim).
 //  - 2WAXXlK3tAA: Thêm Một Lần Đau (Remake Version) - NDMT | Nhạc Hoa Lời Việt
+//    — đã phát thật trong kiểm tra live (Rạp Trời).
+//  - 32sYGCOYJUM: CHẠY NGAY ĐI | RUN NOW | SƠN TÙNG M-TP | Official Music Video (4:34)
+//    — kênh Sơn Tùng M-TP Official, cùng kênh chính chủ với abPmZCZZrFA đã
+//    phát được; ID xác nhận qua nhiều nguồn (VnExpress, download.vn,
+//    thuthuat.taimienphi.vn đều nhúng đúng embed/32sYGCOYJUM) + oEmbed trả
+//    đúng tiêu đề/kênh và thời lượng 274s. Thay cho OKjhlW1MveM (Quang Đăng
+//    Trần, kênh re-upload "Suyers Official") bị YouTube báo "Video không có
+//    sẵn" khi nhúng (lỗi 101/150: cấm nhúng) ở kiểm tra live round 3.
+//    Lưu ý thật: từ máy này KHÔNG kiểm chứng được tính nhúng của từng video
+//    — mọi cách kiểm tra phía máy chủ đều trả kết quả suy giảm ngay cả với
+//    abPmZCZZrFA đã phát được (trang watch bị đẩy về google.com/sorry, API
+//    Innertube trả UNPLAYABLE cho cả video tốt, yt-dlp bị bắt đăng nhập,
+//    Chromium headless không qua được proxy). Bằng chứng ở đây là mức kênh:
+//    cùng kênh chính chủ với video đã phát được. Lưới an toàn: youtube.jsx
+//    nay tự bỏ qua sang bài tiếp khi player báo lỗi (onError) nên nếu video
+//    này cũng cấm nhúng thì màn hình không kẹt đen ở 0:00 nữa.
 export const SHIRT_COLORS = [
   { id: 'xanh-nhat', name: 'Xanh nhạt', hex: '#b8cd8e' },
   { id: 'cam-dat', name: 'Cam đất', hex: '#cf9a80' },
@@ -83,7 +102,7 @@ export const ROOMS = {
     },
     queue: [
       { id: 'abPmZCZZrFA', title: 'SƠN TÙNG M-TP | ĐỪNG LÀM TRÁI TIM ANH ĐAU', by: 'M-TP Entertainment', duration: '5:26', votes: 0, byGuest: 'Cả rạp' },
-      { id: 'OKjhlW1MveM', title: 'QUANG ĐĂNG TRẦN – ANH ĐÃ KHÔNG BIẾT CÁCH YÊU EM', by: 'Quang Đăng Trần', duration: '4:44', votes: 4, byGuest: 'Mr. Sun' },
+      { id: '32sYGCOYJUM', title: 'SƠN TÙNG M-TP | CHẠY NGAY ĐI (RUN NOW)', by: 'Sơn Tùng M-TP', duration: '4:34', votes: 4, byGuest: 'Mr. Sun' },
       { id: '2WAXXlK3tAA', title: 'Thêm Một Lần Đau (Remake Version) – NDMT', by: 'NDMT', duration: '4:37', votes: 2, byGuest: 'NamCưBụ' },
     ],
   },
@@ -134,6 +153,7 @@ export const ROOMS = {
       { id: '2WAXXlK3tAA', title: 'Thêm Một Lần Đau (Remake Version) – NDMT', by: 'NDMT', duration: '4:37', votes: 1, byGuest: 'NamCưBụ' },
     ],
   },
+  karaoke: KARAOKE_ROOM,
 };
 
 export const MISSIONS = [

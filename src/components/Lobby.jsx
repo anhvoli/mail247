@@ -1,6 +1,20 @@
 import { ROOMS, LV_EXP } from '../data';
+import { KARAOKE_RULES } from '../karaoke-room-spec';
+import { SANH_SPEC } from '../sanh-spec';
 
-export default function Lobby({ guest, exp, nowPlayingByRoom, onEnterRoom, onLeave }) {
+// Karaoke mở 19:00–23:00 giờ VN (theo bản gốc). Ngoài giờ vẫn vào xem thử
+// được, chỉ hiện ghi chú — xem RoomView.jsx.
+function karaokeOpenNow() {
+  try {
+    const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
+    const h = now.getHours();
+    const open = parseInt(KARAOKE_RULES.openHours.open, 10);
+    const close = parseInt(KARAOKE_RULES.openHours.close, 10);
+    return h >= open && h < close;
+  } catch { return true; }
+}
+
+export default function Lobby({ guest, exp, nowPlayingByRoom, onEnterRoom, onOpenPrivateRooms, onLeave }) {
   const level = Math.floor(exp / LV_EXP) + 1;
   const progress = exp % LV_EXP;
   return (
@@ -10,7 +24,7 @@ export default function Lobby({ guest, exp, nowPlayingByRoom, onEnterRoom, onLea
           <div className="logo">RẠP CHIẾU <span>CHUNG</span></div>
           <div style={{ color: '#9aa5b1' }}>Xem video, nghe nhạc cùng nhau — không cần tài khoản</div>
         </div>
-        <div style={{ minWidth: 220 }}>
+        <div className="lobby-user">
           <div>Xin chào, <b>{guest.name}</b> · LV{level} · {exp} EXP</div>
           <div className="exp-bar"><div style={{ width: `${(progress / LV_EXP) * 100}%` }} /></div>
           <div style={{ fontSize: 12, color: '#9aa5b1' }}>Còn {LV_EXP - progress} EXP nữa để lên LV{level + 1}</div>
@@ -24,29 +38,33 @@ export default function Lobby({ guest, exp, nowPlayingByRoom, onEnterRoom, onLea
           <button key={room.id} className="room-card" onClick={() => onEnterRoom(room.id)}>
             <span className="tag">{room.sub}</span>
             <h2 style={{ marginTop: 10 }}>{room.name}</h2>
-            <p>{room.kind === 'cinema' ? 'Rạp 3D tối, rèm đỏ, màn hình lớn — xem MV cùng cả rạp.' : room.kind === 'arena' ? 'Đấu trường LoL Park: khán đài 3 vòng quanh màn hình khổng lồ giữa sân — cùng xem bán kết T1 vs BLG.' : 'Rạp ngoài trời ban đêm: trăng, đồi, cây thông, bàn tròn, màn LED.'}</p>
+            <p>{room.kind === 'cinema' ? 'Rạp 3D tối, rèm đỏ, màn hình lớn — xem MV cùng cả rạp.' : room.kind === 'arena' ? 'Đấu trường LoL Park: khán đài 3 vòng quanh màn hình khổng lồ giữa sân — cùng xem bán kết T1 vs BLG.' : room.kind === 'karaoke' ? 'Sân khấu rèm đỏ, hát karaoke, chấm điểm 1–10 — mở 19:00–23:00.' : 'Rạp ngoài trời ban đêm: trăng, đồi, cây thông, bàn tròn, màn LED.'}</p>
             <p className="count">~{room.botCount} người đang online · {room.totalSeats} ghế</p>
             {/* "Đang chiếu" lấy từ bài đang phát thật của phòng (App ghi lại mỗi
                 lần đổi bài) — sau vote bỏ qua hay hết bài tự chuyển, thẻ sảnh
                 cũng đổi theo; chưa vào phòng lần nào thì hiện bài mẫu. */}
             <p>Đang chiếu: {nowPlayingByRoom?.[room.id]?.title || room.nowPlaying.title}</p>
+            {room.kind === 'karaoke' && !karaokeOpenNow() && (
+              <p style={{ color: '#ffb454' }}>Chưa mở cửa — 19:00–23:00 (vẫn vào xem thử được)</p>
+            )}
           </button>
         ))}
-        <div className="room-card phase2">
-          <span className="tag">Sắp có</span>
-          <h2 style={{ marginTop: 10 }}>Got Talent / Karaoke</h2>
-          <p>Sân khấu hát karaoke, chấm điểm 1–10. Mở ở Phase 2 (19:00–23:00 như bản gốc).</p>
-        </div>
-        <div className="room-card phase2">
-          <span className="tag">Sắp có</span>
-          <h2 style={{ marginTop: 10 }}>Sảnh 3D</h2>
-          <p>Đi lại tự do trong sảnh (WASD, Shift chạy, Space nhảy). Mở ở Phase 2.</p>
-        </div>
-        <div className="room-card phase2">
-          <span className="tag">Sắp có</span>
+        {/* Sảnh 3D: không có trong ROOMS (không dùng useRoom) — vào bằng
+            roomId 'sanh', App render Sanh3D riêng. */}
+        <button className="room-card" onClick={() => onEnterRoom('sanh')}>
+          <span className="tag">{SANH_SPEC.sub}</span>
+          <h2 style={{ marginTop: 10 }}>{SANH_SPEC.name}</h2>
+          <p>Đi lại tự do trong sảnh (WASD, Shift chạy, Space nhảy), màn hình lớn chiếu cùng video với Rạp phim, 4 cửa vào các phòng.</p>
+          <p className="count">Tối đa {SANH_SPEC.capacity} người</p>
+          <p>Đang chiếu: {nowPlayingByRoom?.phim?.title || ROOMS.phim.nowPlaying.title}</p>
+        </button>
+        {/* Phòng riêng: mở màn danh sách + tạo phòng (link-only, không cần tài khoản). */}
+        <button className="room-card" onClick={onOpenPrivateRooms}>
+          <span className="tag">Tạm thời miễn phí</span>
           <h2 style={{ marginTop: 10 }}>Phòng riêng</h2>
-          <p>Một góc rạp dành cho hội bạn, tạo phòng theo link. Mở ở Phase 2.</p>
-        </div>
+          <p>Một góc rạp dành cho hội bạn, tạo phòng theo link, tự đóng sau 1 giờ.</p>
+          <p className="count">Vào bằng link — không cần tài khoản</p>
+        </button>
       </div>
       <p style={{ color: '#9aa5b1', fontSize: 13, marginTop: 24 }}>
         Bản clone gốc lấy cảm hứng từ choigivui.com (wetube ciné), viết lại hoàn toàn — không sao chép code hay tài sản của web gốc.

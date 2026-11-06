@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BOT_NAMES, ROOMS, arenaSeatId, seatId } from './data';
+import { karaokeAllSeatIds } from './karaoke-room-spec';
 
 function shuffle(arr) {
   const a = [...arr];
@@ -21,6 +22,8 @@ function allSeatIds(room) {
     for (const r of room.rings) for (let n = 1; n <= room.seatsPerRing; n++) ids.push(arenaSeatId(r, n));
     return ids;
   }
+  // Karaoke / Got Talent: 3 hàng A/B/C × 10 ghế đỏ (xem karaoke-room-spec.js).
+  if (room.kind === 'karaoke') return karaokeAllSeatIds();
   const ids = [];
   for (let t = 1; t <= room.tables; t++) for (let s = 1; s <= room.seatsPerTable; s++) ids.push(`B${String(t).padStart(2, '0')}-${s}`);
   return ids;
@@ -117,14 +120,20 @@ export function useRoom(roomId, guestName, resumeVideo) {
   // Cần effect riêng ngoài reset-effect vì đường sảnh → Rạp phim không đổi
   // roomId của hook (lúc ở sảnh hook đã chạy với 'phim'), nên reset-effect
   // không chạy lại — chỉ có resumeVideo đổi thì mới khôi phục được bài.
+  // KHÔNG áp resume khi đang chờ chuyển bài sau vote bỏ qua (skipVotes > 0):
+  // nếu không, App đồng bộ liveNowPlaying trong lúc chờ sẽ đổi bài ngay lúc
+  // bấm vote (bài "nhảy" và counter reset về 0/1 trước khi ai kịp nhìn).
+  const skipVotesRef = useRef(skipVotes);
+  useEffect(() => { skipVotesRef.current = skipVotes; }, [skipVotes]);
   useEffect(() => {
+    if (skipVotesRef.current > 0) return;
     if (resumeVideo && resumeVideo.id !== currentRef.current.id) {
       setCurrent({ ...resumeVideo, nonce: 0 });
       setSkipVotes(0);
     }
   }, [resumeVideo]);
 
-  const advanceToNext = useCallback(() => {
+  const advanceToNext = useCallback((reason) => {
     const q = queueRef.current;
     const sorted = [...q].sort((a, b) => b.votes - a.votes);
     const next = sorted.find((item) => item.id !== currentRef.current.id) || sorted[0];
@@ -134,7 +143,9 @@ export function useRoom(roomId, guestName, resumeVideo) {
     setSkipVotes(0);
     setMessages((m) => [...m, {
       id: msgId.current++, name: 'Hệ thống',
-      text: `Cả rạp cùng xem: ${next.title} (do ${next.byGuest} đề xuất)`,
+      text: reason === 'skip'
+        ? `Đã bỏ qua bài theo vote — cả rạp cùng xem: ${next.title} (do ${next.byGuest} đề xuất)`
+        : `Cả rạp cùng xem: ${next.title} (do ${next.byGuest} đề xuất)`,
       time: new Date(), bot: false, system: true,
     }]);
     setQueue(q.map((item) => ({ ...item, votes: 0 })));
@@ -190,23 +201,34 @@ export function useRoom(roomId, guestName, resumeVideo) {
 
   // Vote bỏ qua: đếm bằng state riêng, watcher effect bên dưới sẽ chuyển bài
   // khi đủ ngưỡng — không phụ thuộc vào closure của callback.
+  // Ghi lại bài đang chiếu lúc bấm vote: hẹn chuyển bài chỉ được bắn khi bài
+  // đó vẫn đang chiếu — nếu bài đã đổi vì lý do khác trong lúc chờ (hết bài
+  // tự nhiên, resume) thì không chuyển nhầm sang bài kế tiếp nữa.
+  const skipForVideoRef = useRef(null);
   const voteSkip = useCallback(() => {
+    skipForVideoRef.current = currentRef.current.id;
     setSkipVotes((v) => (v > 0 ? v : v + 1));
   }, []);
 
-  // Chuyển bài 2 giây sau khi đủ vote (round 1 chỉ chờ 600ms nên trạng thái
-  // 1/1 gần như không bao giờ nhìn thấy được: vote xong là bài đã đổi và
-  // counter reset về 0/1 cho bài mới, trông như vote chưa từng được ghi).
+  // Chuyển bài 5 giây sau khi đủ vote (round 4 — nguyên nhân thật của lỗi
+  // "vote xong counter vẫn 0/1" ở kiểm tra live: round 1 chỉ chờ 600ms,
+  // round 2 chờ 2s — trạng thái 1/1 + toast chỉ hiện trong tích tắc rồi
+  // advanceToNext reset về 0/1 cho bài mới. Người kiểm tra nhìn sau lúc
+  // bài đã đổi nên chỉ thấy 0/1 của bài mới, còn bài thì "nhảy" ngay sau
+  // mỗi lần bấm. Chờ 5s thì 1/1 và toast nhìn thấy rõ rồi mới chuyển bài;
+  // tin nhắn hệ thống của advanceToNext('skip') cũng ghi lại vote đã xảy
+  // ra nên dấu vết vote không biến mất cùng counter.
   // Hẹn này bị hủy nếu đổi phòng trong lúc chờ (deps có roomId), và callback
-  // kiểm tra lại phòng hiện tại trước khi chuyển — không chuyển bài nhầm
-  // sang phòng mới sau khi đã rời phòng cũ (round 2 từng đen trang khi
-  // rời phòng ngay sau vote).
+  // kiểm tra lại phòng + bài hiện tại trước khi chuyển — không chuyển bài
+  // nhầm sang phòng mới sau khi đã rời phòng cũ (round 2 từng đen trang
+  // khi rời phòng ngay sau vote).
   useEffect(() => {
     if (skipVotes <= 0 || skipVotes < skipThreshold) return undefined;
     const targetRoom = roomId;
+    const targetVideo = skipForVideoRef.current;
     const t = setTimeout(() => {
-      if (roomIdRef.current === targetRoom) advanceRef.current();
-    }, 2000);
+      if (roomIdRef.current === targetRoom && currentRef.current.id === targetVideo) advanceRef.current('skip');
+    }, 5000);
     return () => clearTimeout(t);
   }, [skipVotes, skipThreshold, roomId]);
 

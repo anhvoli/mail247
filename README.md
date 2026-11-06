@@ -20,6 +20,9 @@ npm run preview  # xem thử bản build
    và giới tính, bấm “Chọn ghế và vào rạp”.
 2. Chọn 1 trong 3 phòng: **Rạp phim** (100 ghế), **Rạp Trời** (72 ghế bàn) hoặc
    **Đấu trường LoL Park** (72 ghế khán đài vòng tròn, xem bán kết T1 vs BLG).
+   Đấu trường đã tối ưu hiệu năng: ghế / người ngồi / vòng ghế trống / đèn trần
+   đều dùng instancedMesh, bảng tên là sprite canvas (không còn thẻ Html),
+   chỉ còn 3 đèn point, Canvas giới hạn `dpr` tối đa 1.5.
 3. Chọn ghế trên sơ đồ 2D. Ghế của bạn màu xanh lá, có dấu ✓. Ghế đã có người
    hiện tên người ngồi. **Bot sẽ nhường ghế** khi bạn chọn trúng ghế của bot
    (bot tự chuyển sang ghế trống khác), và bot cũng tự đổi ghế thỉnh thoảng.
@@ -81,7 +84,10 @@ npm run preview  # xem thử bản build
   ghế / góc ngược thì player unmount theo iframe live (xem trên) rồi tạo
   lại từ `startSeconds` khi quay về góc toàn cảnh / tập trung.
 - **Vote bỏ qua:** bấm là counter hiện **1/1** ngay (kèm thông báo), chờ
-  2 giây mới chuyển bài rồi reset về 0/1 cho bài mới. Thẻ “Đang chiếu” ở
+  5 giây mới chuyển bài rồi reset về 0/1 cho bài mới (round 4: trước đây
+  chỉ chờ 2 giây nên 1/1 biến mất trước khi người kiểm tra kịp nhìn, bài
+  thì "nhảy" ngay sau mỗi lần bấm — nay 1/1 nhìn thấy rõ rồi mới chuyển,
+  và chat hệ thống cũng ghi lại "Đã bỏ qua bài theo vote"). Thẻ “Đang chiếu” ở
   sảnh lấy từ bài đang phát thật của từng phòng, và vào lại phòng thì tiếp
   tục bài đó. **Phạm vi thật:** bản source này giữ vote trong state của
   trình duyệt thôi — vote không lưu qua lần tải lại trang và không thấy
@@ -93,14 +99,34 @@ npm run preview  # xem thử bản build
   đúng giây đang xem.
 - **Hàng đợi chống trùng:** không thêm được video đã có trong hàng đợi hoặc
   đang chiếu (so theo video ID); hàng đợi mẫu của Rạp phim không còn 2 bản
-  của cùng 1 bài Sơn Tùng nữa (bản Audio đã thay bằng MV Quang Đăng Trần
-  “Anh Đã Không Biết Cách Yêu Em”, `OKjhlW1MveM`, **4:44** — theo đúng
-  thời lượng trình phát báo).
+  của cùng 1 bài Sơn Tùng nữa (round 4: bản Quang Đăng Trần `OKjhlW1MveM`
+  bị YouTube báo "Video không có sẵn" khi nhúng nên đã thay bằng MV Sơn
+  Tùng **“CHẠY NGAY ĐI”** `32sYGCOYJUM`, **4:34**, cùng kênh chính chủ
+  Sơn Tùng M-TP Official với video đã phát được; nếu video lỗi thì player
+  tự bỏ qua sang bài tiếp theo thay vì kẹt màn đen — xem mục round 4 dưới).
 - **Camera:** đổi góc là đặt thẳng vị trí + hướng nhìn của camera R3F
   (không lerp từng frame), Canvas không bao giờ bị unmount/thay thế khi đổi
   góc; góc “Tập trung màn hình” dí camera sát màn hình nên video live lấp
   đầy khung hình. Lỗi WebGL/player được chặn bằng ErrorBoundary nên không
   bao giờ đen cả trang.
+- **Round 4 (sau kiểm tra live 23:02–23:28):**
+  - **Autoplay:** player khởi động **tắt tiếng** (`mute=1`) + autoplay
+    (trình duyệt chặn autoplay có tiếng nên video kẹt ở 0:00 lúc vào phòng
+    lần đầu), rồi **bật tiếng ở lần chạm/phím đầu tiên** trong phòng; có
+    nút “🔇 Đang tắt tiếng — bấm để bật tiếng” trên góc màn hình, và
+    `onReady` ép `playVideo()`. Trạng thái tiếng giữ qua các lần tạo lại
+    player (đổi controls / đổi góc).
+  - **Video lỗi tự bỏ qua:** `onError` của player (mã 100/101/150…) tự
+    chuyển sang bài tiếp theo thay vì kẹt màn đen ở 0:00; chống lặp: 3 lỗi
+    trong 15 giây thì dừng tự bỏ qua.
+  - **Vòng ghế trống nhìn rõ:** vòng xanh r 0.72–0.92 ôm trọn ngoài đế ghế
+    (vòng cũ 0.5–0.64 lọt dưới đế nên không thấy), nâng lên y=0.05 +
+    polygonOffset chống z-fighting với sàn.
+  - **Góc nhìn từ ghế:** camera dời ra sau hàng ghế cuối và cao hơn đầu
+    người (rạp phim [0, 2.7, 13.2], đấu trường [0, 5.2, 16.8]) nên màn
+    hình hiện rõ phía trên các hàng ghế; **bảng tên chỉ hiện ở góc toàn
+    cảnh + tập trung màn hình** (ở góc ghế/góc ngược tên phình to ~200px
+    và chồng lên nhau nên ẩn đi).
 - **Thumbnail hàng đợi** có fallback: lỗi `default.jpg` thì thử `mqdefault.jpg`,
   vẫn lỗi thì hiện ô placeholder 🎬 thay vì ảnh vỡ.
 
@@ -110,7 +136,9 @@ npm run preview  # xem thử bản build
   04–06 và 07–09 ba); Rạp Trời — 12 bàn tròn × 6 ghế; **Đấu trường LoL Park** —
   3 vòng khán đài A/B/C × 24 ghế = 72 ghế (mã A01…A24, B01…B24, C01…C24) ôm
   quanh màn hình khổng lồ giữa sân, đèn trần đỏ bên T1 / xanh dương bên BLG,
-  vòng neon đỏ–xanh quanh sàn giữa, màn phụ WELCOME + thông tin trận bán kết.
+  vòng neon đỏ–xanh quanh sàn giữa, thanh header trên màn hình giữa (logo T1 —
+  "T1 vs BLG" — logo BLG, video live chạy ngay dưới), màn tường trái đỏ T1 /
+  phải xanh BLG đều ghi thông tin trận bán kết, ghế trái đỏ / phải xanh.
 - **Màn hình chung:** video YouTube live ngay trên mặt màn hình 3D
   (drei `Html` transform), video mở màn đã kiểm chứng ID:
   - Rạp phim: `abPmZCZZrFA` — SƠN TÙNG M-TP | ĐỪNG LÀM TRÁI TIM ANH ĐAU (Official MV, 5:26)
@@ -152,7 +180,8 @@ npm run preview  # xem thử bản build
   có. Cấu trúc state đã tách riêng trong `src/useRoom.js` để sau này thay
   bằng dữ liệu từ server mà không phải viết lại giao diện.
 - **Ngưỡng vote bỏ qua** tính theo % *người thật*: ở bản local chỉ có 1 người
-  thật là bạn, nên 1 vote bỏ qua = 100% và sẽ chuyển bài ngay.
+  thật là bạn, nên 1 vote bỏ qua = 100% và sẽ chuyển bài sau 5 giây (để
+  counter 1/1 nhìn thấy rõ trước khi chuyển).
 - **Bot chat / đổi ghế** chạy theo timer ở máy bạn, không phải người thật.
 - Video YouTube nhúng qua iframe của YouTube; muốn phát đồng bộ chính xác
   từng giây giữa các máy thì cần dùng YouTube IFrame Player API + server

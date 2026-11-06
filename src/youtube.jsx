@@ -1,5 +1,13 @@
 // Trình phát YouTube — YouTube IFrame Player API + watchdog dự phòng.
 //
+// Round 4 (sau kiểm tra live 23:02–23:28):
+// - Video kẹt ở 0:00 lúc vào phòng lần đầu: trình duyệt chặn autoplay CÓ
+//   TIẾNG. Player nay khởi động TẮT TIẾNG (mute=1) + autoplay, rồi bật tiếng
+//   ở lần chạm/phím đầu tiên trong phòng; có nút "Đang tắt tiếng" trên góc
+//   màn hình để bấm bật tiếng (xem overlay trong effect mount).
+// - Video lỗi/không nhúng được (mã 100/101/150...): onError tự bỏ qua sang
+//   bài tiếp theo thay vì kẹt màn đen 0:00 (chống lặp: 3 lỗi trong 15s thì
+//   dừng tự bỏ qua).
 // Vì sao viết lại (round 2, sau khi kiểm tra live thấy tự chuyển bài vẫn hỏng):
 // - Round 1 chỉ gắn onStateChange ENDED trên player API, nhưng có 3 điểm gãy:
 //   (1) loadYouTubeApi() timeout 8s là reject VĨNH VIỄN (apiPromise cache ở
@@ -57,7 +65,7 @@ function loadYouTubeApi() {
 
 const IFRAME_ALLOW = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
 
-export default function YouTubePlayer({ videoId, onEnded, onPlayerReady, controls = true, startSeconds = 0 }) {
+export default function YouTubePlayer({ videoId, onEnded, onPlayerReady, controls = true, startSeconds = 0, onMutedChange }) {
   // Container do React sở hữu, JSX không render con nào bên trong — mọi node
   // con (mount div / iframe) đều tạo bằng tay, YT thay thế chúng cũng không
   // làm lệch cây DOM của React.
@@ -79,6 +87,13 @@ export default function YouTubePlayer({ videoId, onEnded, onPlayerReady, control
 
   useEffect(() => { onEndedRef.current = onEnded; }, [onEnded]);
   useEffect(() => { onPlayerReadyRef.current = onPlayerReady; }, [onPlayerReady]);
+  const onMutedChangeRef = useRef(onMutedChange);
+  useEffect(() => { onMutedChangeRef.current = onMutedChange; }, [onMutedChange]);
+  // Bắt đầu TẮT TIẾNG (round 4): autoplay có tiếng bị chặn nên video kẹt ở
+  // 0:00 tới khi người dùng tương tác. mutedRef giữ trạng thái qua các lần
+  // tạo lại player (đổi controls / đổi góc camera).
+  const mutedRef = useRef(true);
+  const errorTimesRef = useRef([]);
 
   // Bắn onEnded tối đa 1 lần cho mỗi video (tránh watchdog + onStateChange
   // cùng bắn, hoặc poll liên tục bắn khi video đã hết).
@@ -88,6 +103,19 @@ export default function YouTubePlayer({ videoId, onEnded, onPlayerReady, control
     endedFiredForRef.current = vid;
     if (onEndedRef.current) onEndedRef.current();
   }, []);
+
+  // Lỗi player (mã 100: không tìm thấy video, 101/150: chủ video cấm nhúng
+  // trên web khác, 2/5: lỗi player) → tự bỏ qua sang bài tiếp theo thay vì
+  // kẹt màn đen ở 0:00. Chống lặp vô hạn: 3 lỗi trong 15 giây thì dừng tự
+  // bỏ qua, để màn hình lỗi của YouTube hiện ra cho người xem thấy.
+  const handlePlayerError = useCallback(() => {
+    const now = Date.now();
+    const recent = errorTimesRef.current.filter((t) => now - t < 15000);
+    recent.push(now);
+    errorTimesRef.current = recent;
+    if (recent.length >= 3) return;
+    fireEnded();
+  }, [fireEnded]);
 
   // ---- Vòng đời player: tạo 1 lần, tạo LẠI chỉ khi đổi controls ----
   // Đổi controls: YouTube API không cho đổi trực tiếp nên phải hủy player cũ
@@ -106,9 +134,44 @@ export default function YouTubePlayer({ videoId, onEnded, onPlayerReady, control
     mountEl.style.height = '100%';
     container.appendChild(mountEl);
 
+    // Nút "đang tắt tiếng" trên góc màn hình + bật tiếng ở lần chạm/phím
+    // đầu tiên trong phòng (autoplay có tiếng bị chặn nên phải bắt đầu
+    // muted — xem mutedRef). Nút tạo bằng tay như mountEl để YT thay node
+    // cũng không lệch DOM của React; cleanup ở dưới gỡ nó cùng container.
+    const muteBtn = document.createElement('button');
+    muteBtn.type = 'button';
+    muteBtn.textContent = '🔇 Đang tắt tiếng — bấm để bật tiếng';
+    muteBtn.style.cssText = 'position:absolute;top:8px;right:8px;z-index:5;background:rgba(0,0,0,.68);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:999px;padding:6px 12px;font-size:13px;cursor:pointer;';
+    const doUnmute = () => {
+      if (!mutedRef.current) return;
+      mutedRef.current = false;
+      try {
+        const p = playerRef.current;
+        if (p && p.unMute) { p.unMute(); if (p.setVolume) p.setVolume(100); }
+      } catch { /* player chưa sẵn — onReady sẽ áp trạng thái mới */ }
+      if (muteBtn.isConnected) muteBtn.style.display = 'none';
+      if (onMutedChangeRef.current) onMutedChangeRef.current(false);
+    };
+    muteBtn.addEventListener('click', (e) => { e.stopPropagation(); doUnmute(); });
+    container.appendChild(muteBtn);
+    const syncMuteBtn = () => { if (muteBtn.isConnected) muteBtn.style.display = mutedRef.current ? 'block' : 'none'; };
+    syncMuteBtn();
+    // Lần tương tác đầu tiên ở bất cứ đâu trong phòng thì bật tiếng (sau
+    // khi người dùng đã chạm/phím thì trình duyệt cho phát có tiếng).
+    const onFirstGesture = () => { doUnmute(); };
+    window.addEventListener('pointerdown', onFirstGesture);
+    window.addEventListener('keydown', onFirstGesture);
+
     const handleReady = (target) => {
       playerRef.current = target;
       if (onPlayerReadyRef.current) onPlayerReadyRef.current(target);
+      // Áp trạng thái tiếng + ép phát (autoplay muted vẫn có lúc không tự
+      // chạy nếu tab mới mở chưa có tương tác).
+      try {
+        if (mutedRef.current) target.mute();
+        else { target.unMute(); if (target.setVolume) target.setVolume(100); }
+        target.playVideo();
+      } catch { /* ignore */ }
       // Video đổi trong lúc player chưa sẵn: nạp ngay khi sẵn sàng.
       if (pendingVideoIdRef.current && pendingVideoIdRef.current !== loadedVideoIdRef.current) {
         const vid = pendingVideoIdRef.current;
@@ -123,12 +186,13 @@ export default function YouTubePlayer({ videoId, onEnded, onPlayerReady, control
       if (cancelled || !mountEl.isConnected) return;
       player = new YT.Player(mountEl, {
         videoId: videoIdRef.current,
-        playerVars: { autoplay: 1, rel: 0, controls: controlsRef.current ? 1 : 0, start: startSeconds || 0 },
+        playerVars: { autoplay: 1, mute: mutedRef.current ? 1 : 0, rel: 0, controls: controlsRef.current ? 1 : 0, start: startSeconds || 0 },
         events: {
           onReady: (e) => handleReady(e.target),
           onStateChange: (e) => {
             if (e.data === YT.PlayerState.ENDED) fireEnded();
           },
+          onError: () => handlePlayerError(),
         },
       });
     };
@@ -141,7 +205,7 @@ export default function YouTubePlayer({ videoId, onEnded, onPlayerReady, control
       container.innerHTML = '';
       const iframe = document.createElement('iframe');
       iframe.title = 'Trình phát video';
-      iframe.src = `https://www.youtube.com/embed/${videoIdRef.current}?autoplay=1&rel=0&enablejsapi=1&start=${Math.floor(startSecondsRef.current || 0)}`;
+      iframe.src = `https://www.youtube.com/embed/${videoIdRef.current}?autoplay=1&mute=${mutedRef.current ? 1 : 0}&rel=0&enablejsapi=1&start=${Math.floor(startSecondsRef.current || 0)}`;
       iframe.allow = IFRAME_ALLOW;
       iframe.allowFullscreen = true;
       iframe.style.width = '100%';
@@ -162,6 +226,7 @@ export default function YouTubePlayer({ videoId, onEnded, onPlayerReady, control
                 onStateChange: (e) => {
                   if (e.data === window.YT.PlayerState.ENDED) fireEnded();
                 },
+                onError: () => handlePlayerError(),
               },
             });
           } catch { /* giữ iframe thường, watchdog không áp dụng được */ }
@@ -178,6 +243,8 @@ export default function YouTubePlayer({ videoId, onEnded, onPlayerReady, control
 
     return () => {
       cancelled = true;
+      window.removeEventListener('pointerdown', onFirstGesture);
+      window.removeEventListener('keydown', onFirstGesture);
       if (upgradeTimer) clearInterval(upgradeTimer);
       try { if (player) player.destroy(); } catch { /* ignore */ }
       playerRef.current = null;
@@ -205,7 +272,7 @@ export default function YouTubePlayer({ videoId, onEnded, onPlayerReady, control
       // Đang ở fallback iframe thường: đổi src tại chỗ (giữ enablejsapi=1
       // để sau này vẫn nâng cấp được thành player API).
       try {
-        fallbackIframeRef.current.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&enablejsapi=1`;
+        fallbackIframeRef.current.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=${mutedRef.current ? 1 : 0}&rel=0&enablejsapi=1`;
       } catch { /* ignore */ }
       return;
     }
@@ -231,5 +298,5 @@ export default function YouTubePlayer({ videoId, onEnded, onPlayerReady, control
     return () => clearInterval(t);
   }, [fireEnded]);
 
-  return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />;
+  return <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative' }} />;
 }

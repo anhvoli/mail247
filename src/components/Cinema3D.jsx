@@ -4,13 +4,19 @@ import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { seatId } from '../data';
 import YouTubePlayer from '../youtube';
+import AvatarWalk from './AvatarWalk';
 
 // 4 góc camera như bản gốc: toàn cảnh, từ ghế, tập trung màn hình, từ màn chiếu về hàng ghế.
 // Góc "từ màn chiếu" phải đứng TRƯỚC mặt màn hình (z = -6.2, màn hình ở z = -8) rồi
 // nhìn ngược về hàng ghế — đặt camera sau màn hình (z < -8) chỉ thấy khung màn hình đen.
 export const CAMERA_PRESETS = {
   overview: { label: 'Toàn cảnh rạp', pos: [0, 9, 15], look: [0, 1, -2] },
-  seat: { label: 'Góc nhìn từ ghế', pos: [0, 1.7, 7.5], look: [0, 2.2, -10] },
+  // Góc ghế (round 4): trước đây camera ở y=1.7, z=7.5 — NGAY GIỮA hàng ghế,
+  // ngang tầm đầu người ngồi nên đầu avatar chắn tầm nhìn, còn bảng tên
+  // (drei Html distanceFactor) phình to ~200px khi ở sát camera. Nay đặt
+  // sau hàng ghế cuối (hàng J ở z≈12.35), cao hơn đầu người (đỉnh đầu ~1.75),
+  // nhìn về tâm màn hình — màn hình hiện rõ phía trên các hàng ghế trước mặt.
+  seat: { label: 'Góc nhìn từ ghế', pos: [0, 2.7, 13.2], look: [0, 2.4, -8] },
   screen: { label: 'Tập trung màn hình', pos: [0, 2, -3], look: [0, 2.4, -10] },
   reverse: { label: 'Từ màn chiếu về hàng ghế', pos: [0, 2.6, -6.2], look: [0, 1.0, 10] },
 };
@@ -290,12 +296,15 @@ function Seat({ position, color, mine, name, baseColor = '#232a38', baseBack = '
 }
 
 // Vòng xanh lá trên sàn quanh ghế trống (như bản gốc: ghế trống đánh dấu bằng
-// vòng tròn xanh trên sàn).
+// vòng tròn xanh trên sàn). Round 4: vòng cũ (r 0.5–0.64, y=0.02) nằm LỌT
+// dưới đế ghế (đế 0.85×0.8, nửa đường chéo ~0.58) nên từ góc toàn cảnh chỉ
+// thấy ghế đen — vòng mới r 0.72–0.92 ôm TRỌN ngoài đế ghế, nâng lên y=0.05
+// + polygonOffset để không bị z-fighting với sàn, nhìn rõ từ trên cao.
 function EmptySeatRing({ position }) {
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[position[0], 0.02, position[2]]}>
-      <ringGeometry args={[0.5, 0.64, 28]} />
-      <meshBasicMaterial color="#b8cd8e" toneMapped={false} />
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[position[0], 0.05, position[2]]}>
+      <ringGeometry args={[0.72, 0.92, 32]} />
+      <meshBasicMaterial color="#b8cd8e" toneMapped={false} polygonOffset polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
     </mesh>
   );
 }
@@ -307,7 +316,7 @@ const STARS = Array.from({ length: 40 }, (_, i) => {
   return [Math.cos(a) * r, 7 + (i % 5), -6 - (i % 9) * 0.8];
 });
 
-function Auditorium({ room, seats, mySeat, guest, videoId, showLive, onEnded, onPlayerReady, controls, startSeconds }) {
+function Auditorium({ room, seats, mySeat, guest, videoId, showLive, onEnded, onPlayerReady, controls, startSeconds, hideMeSeat, showNames }) {
   const isSky = room.kind === 'sky';
   const seatMeshes = [];
   const tableMeshes = [];
@@ -316,12 +325,16 @@ function Auditorium({ room, seats, mySeat, guest, videoId, showLive, onEnded, on
       for (let c = 1; c <= room.cols; c++) {
         const id = seatId(row, c);
         const occ = seats[id];
+        // Khi khách đang đi lại (avatar đi bộ hiện ra), ẩn hình người ngồi
+        // của chính khách trên ghế để không có 2 "mình" cùng lúc.
+        const me = occ?.kind === 'me';
+        const shown = occ && !(me && hideMeSeat);
         const pos = [(c - 5.5) * 1.05, 0, 2 + ri * 1.15];
         seatMeshes.push(
           <Seat key={id} position={pos}
-            color={occ ? (occ.kind === 'me' ? guest.color.hex : '#8bc6c0') : null}
-            mine={occ?.kind === 'me'}
-            name={occ ? occ.name : null} />,
+            color={shown ? (me ? guest.color.hex : '#8bc6c0') : null}
+            mine={me && !hideMeSeat}
+            name={showNames && shown ? occ.name : null} />,
         );
         if (!occ) seatMeshes.push(<EmptySeatRing key={`ring-${id}`} position={pos} />);
       }
@@ -348,12 +361,14 @@ function Auditorium({ room, seats, mySeat, guest, videoId, showLive, onEnded, on
         const a = (s / room.seatsPerTable) * Math.PI * 2;
         const id = `B${String(t + 1).padStart(2, '0')}-${s + 1}`;
         const occ = seats[id];
+        const me = occ?.kind === 'me';
+        const shown = occ && !(me && hideMeSeat);
         const pos = [cx + Math.cos(a) * 1.5, 0, cz + Math.sin(a) * 1.5];
         seatMeshes.push(
           <Seat key={id} position={pos}
-            color={occ ? (occ.kind === 'me' ? guest.color.hex : '#d7bc75') : null}
-            mine={occ?.kind === 'me'}
-            name={occ ? occ.name : null}
+            color={shown ? (me ? guest.color.hex : '#d7bc75') : null}
+            mine={me && !hideMeSeat}
+            name={showNames && shown ? occ.name : null}
             baseColor="#5a4632" baseBack="#6b543a" />,
         );
         if (!occ) seatMeshes.push(<EmptySeatRing key={`ring-${id}`} position={pos} />);
@@ -463,14 +478,22 @@ function Auditorium({ room, seats, mySeat, guest, videoId, showLive, onEnded, on
   );
 }
 
-export default function Cinema3D({ room, seats, mySeat, guest, cameraPreset, videoId, showLive, onEnded, onPlayerReady, controls, startSeconds }) {
+export default function Cinema3D({ room, seats, mySeat, guest, cameraPreset, videoId, showLive, onEnded, onPlayerReady, controls, startSeconds, onPickSeat }) {
+  // Đang đi lại thì ẩn hình người ngồi của khách trên ghế (xem Auditorium).
+  const [walking, setWalking] = useState(false);
+  // Bảng tên (drei Html distanceFactor) chỉ hiện ở góc toàn cảnh + tập trung
+  // màn hình: ở góc ghế/góc ngược camera sát người ngồi nên tên phình to
+  // ~200px và chồng lên nhau, che cả màn hình (round 4).
+  const showNames = cameraPreset === 'overview' || cameraPreset === 'screen';
   return (
     <Canvas camera={{ position: CAMERA_PRESETS[cameraPreset].pos, fov: 55 }}>
       <color attach="background" args={[room.kind === 'sky' ? '#0a1220' : '#05070a']} />
       <Rig preset={cameraPreset} />
+      <AvatarWalk room={room} seats={seats} guest={guest} mySeat={mySeat}
+        cameraPreset={cameraPreset} onPickSeat={onPickSeat} onWalkChange={setWalking} />
       <Auditorium room={room} seats={seats} mySeat={mySeat} guest={guest} videoId={videoId}
         showLive={showLive} onEnded={onEnded} onPlayerReady={onPlayerReady}
-        controls={controls} startSeconds={startSeconds} />
+        controls={controls} startSeconds={startSeconds} hideMeSeat={walking} showNames={showNames} />
     </Canvas>
   );
 }
