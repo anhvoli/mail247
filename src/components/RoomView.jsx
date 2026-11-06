@@ -47,16 +47,20 @@ const NowPlayingPanel = memo(function NowPlayingPanel({ current, queue, playhead
   const [open, setOpen] = useState(() => typeof window === 'undefined' || window.innerWidth > 640);
   // Đồng hồ phát chỉ sống trong panel này: đọc playheadRef mỗi giây, setState
   // cục bộ nên chỉ panel render lại, không chạm tới Canvas hay RoomView.
+  // Chỉ nhận giờ từ đúng bài đang chiếu (so vid): player lúc chuyển bài có
+  // lúc còn trả giờ/thời lượng của bài CŨ, nhận bừa là panel hiện sai thời
+  // lượng (từng hiện 5:26 của bài Sơn Tùng cho video đấu trường).
   const [time, setTime] = useState(() => ({ ...playheadRef.current }));
   // Đổi bài thì đồng hồ về 0 ngay (không lấy giờ bài cũ).
-  useEffect(() => { setTime({ cur: 0, dur: parseDuration(current.duration) }); }, [current.id, current.duration]);
+  useEffect(() => { setTime({ cur: 0, dur: parseDuration(current.duration), vid: current.id }); }, [current.id, current.duration]);
   useEffect(() => {
     const t = setInterval(() => {
       const p = playheadRef.current;
-      setTime((prev) => (prev.cur === p.cur && prev.dur === p.dur ? prev : { cur: p.cur, dur: p.dur }));
+      if (p.vid !== current.id) return;
+      setTime((prev) => (prev.cur === p.cur && prev.dur === p.dur ? prev : { cur: p.cur, dur: p.dur, vid: p.vid }));
     }, 1000);
     return () => clearInterval(t);
-  }, [playheadRef]);
+  }, [playheadRef, current.id]);
   const suggester = queue.find((q) => q.id === current.id)?.byGuest || current.by;
   const dur = time.dur > 0 ? time.dur : parseDuration(current.duration);
   const pct = dur > 0 ? Math.min(100, (time.cur / dur) * 100) : 0;
@@ -152,13 +156,13 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
   // ref; panel "TRÊN MÀN ẢNH" tự đọc ref bằng interval riêng của nó, còn
   // startSeconds (phát tiếp từ giây đã xem khi player remount vì đổi góc)
   // đọc ref lúc render lại vì đổi góc/đổi bài.
-  const playheadRef = useRef({ cur: 0, dur: 0 });
+  const playheadRef = useRef({ cur: 0, dur: 0, vid: null });
   // Đổi bài thì playhead về 0 ngay trong lúc render (không đợi effect) để
   // startSeconds của bài mới không lấy nhầm giờ bài cũ.
   const playheadVideoId = useRef(current.id);
   if (playheadVideoId.current !== current.id) {
     playheadVideoId.current = current.id;
-    playheadRef.current = { cur: 0, dur: parseDuration(current.duration) };
+    playheadRef.current = { cur: 0, dur: parseDuration(current.duration), vid: current.id };
   }
   const stageRef = useRef(null);
   const playerRef = useRef(null);
@@ -179,6 +183,8 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
   const averageScore = scores.length ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : null;
   const scorerCount = scores.length;
 
+  const currentIdRef = useRef(current.id);
+  useEffect(() => { currentIdRef.current = current.id; }, [current.id]);
   useEffect(() => {
     const t = setInterval(() => {
       const p = playerRef.current;
@@ -186,7 +192,15 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
       try {
         const dur = p.getDuration ? p.getDuration() : 0;
         const cur = p.getCurrentTime ? p.getCurrentTime() : 0;
-        if (dur > 0) playheadRef.current = { cur, dur };
+        // Chỉ ghi giờ khi player đang giữ đúng bài đang chiếu: lúc chuyển
+        // bài player còn trả thời lượng của bài cũ, ghi bừa là panel hiện
+        // sai thời lượng (từng hiện 5:26 cho video đấu trường).
+        let vid = currentIdRef.current;
+        try {
+          const vd = p.getVideoData && p.getVideoData();
+          if (vd && vd.video_id) vid = vd.video_id;
+        } catch { /* API cũ không có getVideoData */ }
+        if (dur > 0 && vid === currentIdRef.current) playheadRef.current = { cur, dur, vid };
       } catch { /* player chưa sẵn / đã hủy */ }
     }, 1000);
     return () => clearInterval(t);
@@ -214,7 +228,7 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
       cameraPreset: camera, videoId: current.id,
       showLive: camera === 'overview' || camera === 'screen',
       onEnded: handleEnded, onPlayerReady: handlePlayerReady,
-      controls: controlsOn, startSeconds: Math.floor(playheadRef.current.cur),
+      controls: controlsOn, startSeconds: playheadRef.current.vid === current.id ? Math.floor(playheadRef.current.cur) : 0,
       onPickSeat: handlePickSeat,
     };
     return room.kind === 'karaoke'

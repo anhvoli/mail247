@@ -93,7 +93,19 @@ export default function YouTubePlayer({ videoId, onEnded, onPlayerReady, control
   // 0:00 tới khi người dùng tương tác. mutedRef giữ trạng thái qua các lần
   // tạo lại player (đổi controls / đổi góc camera).
   const mutedRef = useRef(true);
-  const errorTimesRef = useRef([]);
+  // Chống vòng lặp tự bỏ qua làm giao diện NHẢY (fix 07/11 ~00:10):
+  // khi YouTube chặn/không phát được, onError bắn liên tục — mỗi lần bỏ qua
+  // là advanceToNext đổi bài + tạo lại player, mà guard cũ "3 lỗi trong 15s"
+  // không bao giờ kịp chặn vì mỗi vòng lỗi→tạo lại player tốn >5s nên cửa
+  // sổ 15s không bao giờ chứa đủ 3 lỗi. Hàng đợi chỉ có 2-3 bài nên nó cứ
+  // xoay vòng A→B→A vài giây một lần, bài đang chiếu + thời lượng + tiêu đề
+  // iframe nhảy loạn. Đếm LỖI LIÊN TIẾP thay vì lỗi theo thời gian: chỉ cần
+  // video phát được thật (state playing / chạy quá 2s) là reset về 0; 2 video
+  // lỗi liên tiếp thì DỪNG hẳn tự bỏ qua và để màn hình lỗi của YouTube hiện
+  // ra — người xem tự bấm bài khác, không còn vòng lặp.
+  const consecutiveErrorsRef = useRef(0);
+  const autoSkipStoppedRef = useRef(false);
+  const lastErrorVideoRef = useRef(null);
 
   // Bắn onEnded tối đa 1 lần cho mỗi video (tránh watchdog + onStateChange
   // cùng bắn, hoặc poll liên tục bắn khi video đã hết).
@@ -106,14 +118,20 @@ export default function YouTubePlayer({ videoId, onEnded, onPlayerReady, control
 
   // Lỗi player (mã 100: không tìm thấy video, 101/150: chủ video cấm nhúng
   // trên web khác, 2/5: lỗi player) → tự bỏ qua sang bài tiếp theo thay vì
-  // kẹt màn đen ở 0:00. Chống lặp vô hạn: 3 lỗi trong 15 giây thì dừng tự
-  // bỏ qua, để màn hình lỗi của YouTube hiện ra cho người xem thấy.
+  // kẹt màn đen ở 0:00. CHỈ bỏ qua tối đa 1 lần trong 1 chuỗi lỗi liên tiếp:
+  // video thứ 2 mà cũng lỗi thì DỪNG hẳn (xem consecutiveErrorsRef) để
+  // không xoay vòng đổi bài vô hạn làm giao diện nhảy. Lỗi của player cũ
+  // (đã bị hủy/tạo lại, báo muộn) thì bỏ qua hẳn.
   const handlePlayerError = useCallback(() => {
-    const now = Date.now();
-    const recent = errorTimesRef.current.filter((t) => now - t < 15000);
-    recent.push(now);
-    errorTimesRef.current = recent;
-    if (recent.length >= 3) return;
+    if (loadedVideoIdRef.current && loadedVideoIdRef.current !== videoIdRef.current) return;
+    const vid = videoIdRef.current;
+    if (lastErrorVideoRef.current === vid) return; // mỗi video chỉ tính 1 lỗi
+    lastErrorVideoRef.current = vid;
+    consecutiveErrorsRef.current += 1;
+    if (consecutiveErrorsRef.current >= 2 || autoSkipStoppedRef.current) {
+      autoSkipStoppedRef.current = true;
+      return;
+    }
     fireEnded();
   }, [fireEnded]);
 
@@ -262,6 +280,7 @@ export default function YouTubePlayer({ videoId, onEnded, onPlayerReady, control
     if (videoIdRef.current === videoId) return;
     videoIdRef.current = videoId;
     endedFiredForRef.current = null; // video mới: cho phép bắn ENDED lại
+    lastErrorVideoRef.current = null; // video mới: tính lỗi lại từ đầu
     lastTimeRef.current = 0;
     const p = playerRef.current;
     if (p && p.loadVideoById) {
@@ -283,15 +302,24 @@ export default function YouTubePlayer({ videoId, onEnded, onPlayerReady, control
   // Poll mỗi giây: state ENDED (0) hoặc đã chạy tới cuối video
   // (currentTime >= duration - 0.75s) thì chuyển bài. Đọc qua try/catch vì
   // getPlayerState/getDuration ném lỗi khi player chưa sẵn sàng.
+  // Đồng thời đây là bằng chứng "video phát được thật": đang phát (state 1)
+  // hoặc đã chạy quá 2s thì reset bộ đếm lỗi liên tiếp về 0 — chuỗi lỗi
+  // chỉ tính khi video chưa từng phát được, để vòng lặp tự bỏ qua không
+  // bao giờ chạy khi video phát bình thường.
   useEffect(() => {
     const t = setInterval(() => {
       const p = playerRef.current;
       if (!p) return;
       try {
-        if (p.getPlayerState && p.getPlayerState() === 0) { fireEnded(); return; }
+        const state = p.getPlayerState ? p.getPlayerState() : -1;
+        if (state === 0) { fireEnded(); return; }
         const dur = p.getDuration ? p.getDuration() : 0;
         const cur = p.getCurrentTime ? p.getCurrentTime() : 0;
         if (dur > 0) lastTimeRef.current = Math.floor(cur);
+        if (state === 1 || (dur > 0 && cur > 2)) {
+          consecutiveErrorsRef.current = 0;
+          autoSkipStoppedRef.current = false;
+        }
         if (dur > 0 && cur >= dur - 0.75) fireEnded();
       } catch { /* player chưa sẵn */ }
     }, 1000);
