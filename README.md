@@ -18,7 +18,8 @@ npm run preview  # xem thử bản build
 
 1. Mở app, nhập **tên in trên áo** (để trống sẽ tự gán `Khách NN`), chọn màu áo
    và giới tính, bấm “Chọn ghế và vào rạp”.
-2. Chọn 1 trong 2 phòng mẫu: **Rạp phim** (100 ghế) hoặc **Rạp Trời** (72 ghế bàn).
+2. Chọn 1 trong 3 phòng: **Rạp phim** (100 ghế), **Rạp Trời** (72 ghế bàn) hoặc
+   **Đấu trường LoL Park** (72 ghế khán đài vòng tròn, xem bán kết T1 vs BLG).
 3. Chọn ghế trên sơ đồ 2D. Ghế của bạn màu xanh lá, có dấu ✓. Ghế đã có người
    hiện tên người ngồi. **Bot sẽ nhường ghế** khi bạn chọn trúng ghế của bot
    (bot tự chuyển sang ghế trống khác), và bot cũng tự đổi ghế thỉnh thoảng.
@@ -32,7 +33,8 @@ npm run preview  # xem thử bản build
    Phase 1). Nút “⛶ Toàn màn hình” mở toàn màn hình cho cả khu vực rạp,
    bấm **Esc** để thoát.
 6. Mỗi phòng có hàng đợi và video riêng: Rạp phim mở đầu bằng MV Sơn Tùng
-   M-TP, Rạp Trời mở đầu bằng “Thêm Một Lần Đau (Remake)” của NDMT; đổi phòng
+   M-TP, Rạp Trời mở đầu bằng “Thêm Một Lần Đau (Remake)” của NDMT, Đấu trường
+   LoL Park mở đầu bằng highlights chung kết CKTG 2024 T1 vs BLG; đổi phòng
    là state của phòng cũ được giữ nguyên theo từng phòng, không lẫn nhau.
 
 ## Màn hình chiếu hoạt động như thế nào (ghi rõ để khỏi nhầm)
@@ -104,12 +106,25 @@ npm run preview  # xem thử bản build
 
 ## Có gì trong Phase 1
 
-- **2 phòng:** Rạp phim — 10 hàng A–J × 10 ghế (ghế 01 và 10 đơn, 02–03 đôi,
-  04–06 và 07–09 ba); Rạp Trời — 12 bàn tròn × 6 ghế.
+- **3 phòng:** Rạp phim — 10 hàng A–J × 10 ghế (ghế 01 và 10 đơn, 02–03 đôi,
+  04–06 và 07–09 ba); Rạp Trời — 12 bàn tròn × 6 ghế; **Đấu trường LoL Park** —
+  3 vòng khán đài A/B/C × 24 ghế = 72 ghế (mã A01…A24, B01…B24, C01…C24) ôm
+  quanh màn hình khổng lồ giữa sân, đèn trần đỏ bên T1 / xanh dương bên BLG,
+  vòng neon đỏ–xanh quanh sàn giữa, màn phụ WELCOME + thông tin trận bán kết.
 - **Màn hình chung:** video YouTube live ngay trên mặt màn hình 3D
   (drei `Html` transform), video mở màn đã kiểm chứng ID:
   - Rạp phim: `abPmZCZZrFA` — SƠN TÙNG M-TP | ĐỪNG LÀM TRÁI TIM ANH ĐAU (Official MV, 5:26)
   - Rạp Trời: `2WAXXlK3tAA` — Thêm Một Lần Đau (Remake Version) – NDMT
+  - Đấu trường LoL Park: `rZHrffKAc6k` — T1 vs BLG Highlights | Grand Finals |
+    Worlds 2024 (kênh LoL Esports, đã kiểm chứng qua oEmbed YouTube; thời
+    lượng để `?` vì oEmbed không trả thời lượng — trình phát báo giờ thật khi
+    chạy). Đây là highlights trận chung kết CKTG 2024 (T1 thắng BLG 3-2) để
+    xem lại trước trận bán kết.
+- **Lưu ý về trận bán kết T1 vs BLG:** cặp đấu này chỉ chốt khi **T1 thắng KC**
+  ở tứ kết (sáng thứ Bảy 07/11 lúc 05:00 giờ VN); BLG đã vào bán kết sau khi
+  thắng DK 3-0. Trận bán kết dự kiến **05:00 thứ Hai 09/11/2026 giờ VN, BO5**.
+  Nếu T1 thua KC thì phòng đấu trường sẽ xem KC vs BLG — đổi tên/băng hiệu
+  trong `Arena3D.jsx` và `data.js` khi có kết quả.
 - **Hàng đợi + bình chọn**, **vote bỏ qua 30%**, **chat + emoji 4 nhóm**
   (Cảm xúc 24, Trái tim 12, Cử chỉ, Tiệc tùng), **3 điệu bộ**.
 - **Rạp 3D thật bằng React Three Fiber** (`src/components/Cinema3D.jsx`):

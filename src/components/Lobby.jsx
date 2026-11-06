@@ -24,7 +24,7 @@ export default function Lobby({ guest, exp, nowPlayingByRoom, onEnterRoom, onLea
           <button key={room.id} className="room-card" onClick={() => onEnterRoom(room.id)}>
             <span className="tag">{room.sub}</span>
             <h2 style={{ marginTop: 10 }}>{room.name}</h2>
-            <p>{room.kind === 'cinema' ? 'Rạp 3D tối, rèm đỏ, màn hình lớn — xem MV cùng cả rạp.' : 'Rạp ngoài trời ban đêm: trăng, đồi, cây thông, bàn tròn, màn LED.'}</p>
+            <p>{room.kind === 'cinema' ? 'Rạp 3D tối, rèm đỏ, màn hình lớn — xem MV cùng cả rạp.' : room.kind === 'arena' ? 'Đấu trường LoL Park: khán đài 3 vòng quanh màn hình khổng lồ giữa sân — cùng xem bán kết T1 vs BLG.' : 'Rạp ngoài trời ban đêm: trăng, đồi, cây thông, bàn tròn, màn LED.'}</p>
             <p className="count">~{room.botCount} người đang online · {room.totalSeats} ghế</p>
             {/* "Đang chiếu" lấy từ bài đang phát thật của phòng (App ghi lại mỗi
                 lần đổi bài) — sau vote bỏ qua hay hết bài tự chuyển, thẻ sảnh

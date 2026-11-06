@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BOT_NAMES, ROOMS, seatId } from './data';
+import { BOT_NAMES, ROOMS, arenaSeatId, seatId } from './data';
 
 function shuffle(arr) {
   const a = [...arr];
@@ -14,6 +14,11 @@ function allSeatIds(room) {
   if (room.kind === 'cinema') {
     const ids = [];
     for (const r of room.rows) for (let c = 1; c <= room.cols; c++) ids.push(seatId(r, c));
+    return ids;
+  }
+  if (room.kind === 'arena') {
+    const ids = [];
+    for (const r of room.rings) for (let n = 1; n <= room.seatsPerRing; n++) ids.push(arenaSeatId(r, n));
     return ids;
   }
   const ids = [];

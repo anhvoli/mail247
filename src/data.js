@@ -57,6 +57,14 @@ export function seatId(row, col) {
   return `${row}${String(col).padStart(2, '0')}`;
 }
 
+// Đấu trường LoL Park: 3 vòng khán đài A/B/C × 24 ghế = 72 ghế.
+// Vòng A gần sân nhất (thấp nhất), vòng C cao nhất. Mã ghế: A01…A24, B01…B24, C01…C24.
+export const ARENA_RINGS = ['A', 'B', 'C'];
+export const ARENA_SEATS_PER_RING = 24;
+export function arenaSeatId(ring, n) {
+  return `${ring}${String(n).padStart(2, '0')}`;
+}
+
 export const ROOMS = {
   phim: {
     id: 'phim',
@@ -98,6 +106,32 @@ export const ROOMS = {
       { id: '2WAXXlK3tAA', title: 'Thêm Một Lần Đau (Remake Version) – NDMT', by: 'NDMT', duration: '4:37', votes: 0, byGuest: 'NamCưBụ' },
       { id: 'nMBjz95ZXEc', title: 'Nhạc Trẻ 8x 9x — Tuyển tập NDMT', by: 'NDMT', duration: '12:26', votes: 0, byGuest: 'Hoàng Nam' },
       { id: 'abPmZCZZrFA', title: 'SƠN TÙNG M-TP | ĐỪNG LÀM TRÁI TIM ANH ĐAU', by: 'M-TP Entertainment', duration: '5:26', votes: 0, byGuest: 'Thu Hằng' },
+    ],
+  },
+  arena: {
+    id: 'arena',
+    name: 'Đấu trường LoL Park',
+    sub: 'BÁN KẾT CKTG 2026 · 72 GHẾ',
+    kind: 'arena',
+    totalSeats: 72,
+    rings: ARENA_RINGS,
+    seatsPerRing: ARENA_SEATS_PER_RING,
+    botCount: 30,
+    // Video mở màn ĐÃ KIỂM CHỨNG qua oEmbed YouTube:
+    //  - rZHrffKAc6k: "T1 vs BLG Highlights | T1 vs Bilibili Gaming | Grand Finals | Worlds 2024"
+    //    (kênh LoL Esports) — trận chung kết CKTG 2024 T1 thắng BLG 3-2, xem lại trước bán kết.
+    //    Thời lượng không lấy được từ oEmbed/trang watch nên để '?'; trình phát
+    //    báo giờ thật khi chạy (panel "TRÊN MÀN ẢNH" dùng giờ của player).
+    nowPlaying: {
+      id: 'rZHrffKAc6k',
+      title: 'T1 vs BLG Highlights | Grand Finals | Worlds 2024',
+      by: 'LoL Esports',
+      duration: '?',
+    },
+    queue: [
+      { id: 'rZHrffKAc6k', title: 'T1 vs BLG Highlights | Grand Finals | Worlds 2024', by: 'LoL Esports', duration: '?', votes: 0, byGuest: 'Cả rạp' },
+      { id: 'abPmZCZZrFA', title: 'SƠN TÙNG M-TP | ĐỪNG LÀM TRÁI TIM ANH ĐAU', by: 'M-TP Entertainment', duration: '5:26', votes: 2, byGuest: 'Mr. Sun' },
+      { id: '2WAXXlK3tAA', title: 'Thêm Một Lần Đau (Remake Version) – NDMT', by: 'NDMT', duration: '4:37', votes: 1, byGuest: 'NamCưBụ' },
     ],
   },
 };

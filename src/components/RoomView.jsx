@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import Cinema3D, { CAMERA_PRESETS } from './Cinema3D';
+import Arena3D, { ARENA_CAMERA_PRESETS } from './Arena3D';
 import ErrorBoundary from './ErrorBoundary';
 import SeatMap from './SeatMap';
 import { EMOJI_GROUPS, GESTURES, MISSIONS } from '../data';
@@ -88,6 +89,9 @@ function QueueThumb({ videoId, title }) {
 export default function RoomView({ guest, roomState, onLeave, exp, missionsDone, onMissionDone, onChatSent }) {
   const { room, seats, mySeat, pickSeat, queue, current, voted, vote, addToQueue,
     messages, sendMessage, skipVoted, voteSkip, skipCount, skipThreshold, realCount, occupiedCount, advanceToNext } = roomState;
+  // Góc camera theo từng loại phòng: đấu trường dùng preset riêng (vị trí cho
+  // khán đài vòng tròn), rạp phim / Rạp Trời dùng preset cũ.
+  const PRESETS = room.kind === 'arena' ? ARENA_CAMERA_PRESETS : CAMERA_PRESETS;
   const [tab, setTab] = useState('queue');
   const [chatText, setChatText] = useState('');
   const [showEmoji, setShowEmoji] = useState(false);
@@ -212,11 +216,19 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
                 vì iframe DOM luôn vẽ trên canvas và sẽ "xuyên" qua ghế ngồi,
                 còn góc ngược thì màn hình ở sau lưng người xem. */}
             <ErrorBoundary>
-              <Cinema3D room={room} seats={seats} mySeat={mySeat} guest={guest}
-                cameraPreset={camera} videoId={current.id}
-                showLive={camera === 'overview' || camera === 'screen'}
-                onEnded={advanceToNext} onPlayerReady={(p) => { playerRef.current = p; }}
-                controls={controlsOn} startSeconds={Math.floor(playhead.cur)} />
+              {room.kind === 'arena' ? (
+                <Arena3D room={room} seats={seats} mySeat={mySeat} guest={guest}
+                  cameraPreset={camera} videoId={current.id}
+                  showLive={camera === 'overview' || camera === 'screen'}
+                  onEnded={advanceToNext} onPlayerReady={(p) => { playerRef.current = p; }}
+                  controls={controlsOn} startSeconds={Math.floor(playhead.cur)} />
+              ) : (
+                <Cinema3D room={room} seats={seats} mySeat={mySeat} guest={guest}
+                  cameraPreset={camera} videoId={current.id}
+                  showLive={camera === 'overview' || camera === 'screen'}
+                  onEnded={advanceToNext} onPlayerReady={(p) => { playerRef.current = p; }}
+                  controls={controlsOn} startSeconds={Math.floor(playhead.cur)} />
+              )}
             </ErrorBoundary>
             <NowPlayingPanel current={current} queue={queue} playhead={playhead}
               skipCount={skipCount} skipThreshold={skipThreshold} realCount={realCount}
@@ -228,13 +240,13 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
                 ✕ Thoát góc tập trung màn hình
               </button>
             )}
-            <span className="cam-label">{CAMERA_PRESETS[camera].label}</span>
+            <span className="cam-label">{PRESETS[camera].label}</span>
             <span className="wasd-hint">W A S D để đi lại · Space để nhảy · E hoặc bấm vào ghế để ngồi</span>
           </div>
           <div className="controls">
             <span><b>Đang chiếu:</b> {current.title} · {current.by}</span>
             <span className="cam-btns">
-              {Object.entries(CAMERA_PRESETS).map(([key, p]) => (
+              {Object.entries(PRESETS).map(([key, p]) => (
                 <button key={key} className={camera === key ? 'on' : ''} onClick={() => setCamera(key)}>{p.label}</button>
               ))}
             </span>
