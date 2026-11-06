@@ -1,15 +1,32 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Cinema3D, { CAMERA_PRESETS } from './Cinema3D';
 import SeatMap from './SeatMap';
+import YouTubePlayer from '../youtube';
 import { EMOJI_GROUPS, GESTURES, MISSIONS } from '../data';
 
 function fmtTime(d) {
   return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 }
 
+// Ảnh thumbnail hàng đợi: thử default.jpg, lỗi thì thử mqdefault.jpg, vẫn lỗi thì
+// hiện ô placeholder — không để ảnh vỡ nằm trong danh sách.
+function QueueThumb({ videoId, title }) {
+  const [step, setStep] = useState(0);
+  useEffect(() => { setStep(0); }, [videoId]);
+  if (step >= 2) {
+    return (
+      <span className="thumb-fallback" aria-label={title}>🎬</span>
+    );
+  }
+  return (
+    <img src={step === 0 ? `https://i.ytimg.com/vi/${videoId}/default.jpg` : `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`}
+      alt="" loading="lazy" onError={() => setStep((s) => s + 1)} />
+  );
+}
+
 export default function RoomView({ guest, roomState, onLeave, exp, missionsDone, onMissionDone, onChatSent }) {
   const { room, seats, mySeat, pickSeat, queue, current, voted, vote, addToQueue,
-    messages, sendMessage, skipVoted, voteSkip, skipCount, skipThreshold, occupiedCount } = roomState;
+    messages, sendMessage, skipVoted, voteSkip, skipCount, skipThreshold, occupiedCount, advanceToNext } = roomState;
   const [tab, setTab] = useState('queue');
   const [chatText, setChatText] = useState('');
   const [showEmoji, setShowEmoji] = useState(false);
@@ -18,6 +35,36 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
   const [toast, setToast] = useState('');
   const [queueUrl, setQueueUrl] = useState('');
   const [camera, setCamera] = useState('overview');
+  const [controlsOn, setControlsOn] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const stageRef = useRef(null);
+  const playerRef = useRef(null);
+
+  // Escape thoát toàn màn hình (kể cả khi đang ở góc "Tập trung màn hình").
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape' && document.fullscreenElement) {
+        document.exitFullscreen().catch(() => { /* ignore */ });
+      }
+    };
+    const onFsChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('fullscreenchange', onFsChange);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('fullscreenchange', onFsChange);
+    };
+  }, []);
+
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => { /* ignore */ });
+      return;
+    }
+    if (stageRef.current && stageRef.current.requestFullscreen) {
+      stageRef.current.requestFullscreen().catch(() => { /* ignore */ });
+    }
+  };
 
   const sendChat = () => {
     const text = chatText.trim();
@@ -35,9 +82,12 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
 
   const submitQueue = () => {
     if (!queueUrl.trim()) return;
-    if (addToQueue(queueUrl.trim())) {
+    const res = addToQueue(queueUrl.trim());
+    if (res === true) {
       setToast('Đã thêm video vào hàng đợi — cả rạp cùng bình chọn nhé.');
       setQueueUrl('');
+    } else if (res === 'duplicate') {
+      setToast('Video này đã có trong hàng đợi (hoặc đang chiếu) rồi.');
     } else {
       setToast('Link chưa đúng — dán link YouTube dạng watch?v=... hoặc youtu.be/...');
     }
@@ -56,16 +106,20 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
       </div>
 
       <div className="main">
-        <div className="stage">
+        <div className={`stage ${camera === 'screen' ? 'focus-screen' : ''}`} ref={stageRef}>
           <div className="view3d">
-            <Cinema3D room={room} seats={seats} mySeat={mySeat} guest={guest} cameraPreset={camera} />
+            <Cinema3D room={room} seats={seats} mySeat={mySeat} guest={guest} cameraPreset={camera} videoId={current.id} />
             <span className="cam-label">{CAMERA_PRESETS[camera].label}</span>
           </div>
           <div className="player-wrap">
-            <iframe key={current.id} title={current.title}
-              src={`https://www.youtube.com/embed/${current.id}?autoplay=1&rel=0`}
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen />
+            <YouTubePlayer key={current.nonce} videoId={current.id}
+              onEnded={advanceToNext} onPlayerReady={(p) => { playerRef.current = p; }}
+              controls={controlsOn} />
+            {camera === 'screen' && (
+              <button className="focus-exit" onClick={() => setCamera('overview')}>
+                ✕ Thoát góc tập trung màn hình
+              </button>
+            )}
           </div>
           <div className="controls">
             <span><b>Đang chiếu:</b> {current.title} · {current.by}</span>
@@ -73,6 +127,14 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
               {Object.entries(CAMERA_PRESETS).map(([key, p]) => (
                 <button key={key} className={camera === key ? 'on' : ''} onClick={() => setCamera(key)}>{p.label}</button>
               ))}
+            </span>
+            <span className="cam-btns">
+              <button className="player-controls-btn" onClick={() => setControlsOn((v) => !v)} title="Bật/tắt nút điều khiển của trình phát YouTube">
+                {controlsOn ? 'Ẩn điều khiển trình phát' : 'Hiện điều khiển trình phát'}
+              </button>
+              <button className="player-controls-btn" onClick={toggleFullscreen} title="Toàn màn hình (Esc để thoát)">
+                {isFullscreen ? 'Thoát toàn màn hình (Esc)' : '⛶ Toàn màn hình'}
+              </button>
             </span>
           </div>
           <div className="gesture-row">
@@ -105,7 +167,7 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
               </div>
               {queue.map((item) => (
                 <div key={item.id + item.title} className={`queue-item ${item.id === current.id ? 'playing' : ''}`}>
-                  <img src={`https://i.ytimg.com/vi/${item.id}/default.jpg`} alt="" loading="lazy" />
+                  <QueueThumb videoId={item.id} title={item.title} />
                   <div>
                     <div className="t">{item.title}</div>
                     <div className="m">{item.by} · {item.duration} · {item.byGuest} đề xuất{item.id === current.id ? ' · ĐANG CHIẾU' : ''}</div>

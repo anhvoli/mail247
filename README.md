@@ -22,12 +22,42 @@ npm run preview  # xem thử bản build
 3. Chọn ghế trên sơ đồ 2D. Ghế của bạn màu xanh lá, có dấu ✓. Ghế đã có người
    hiện tên người ngồi. **Bot sẽ nhường ghế** khi bạn chọn trúng ghế của bot
    (bot tự chuyển sang ghế trống khác), và bot cũng tự đổi ghế thỉnh thoảng.
+   Bot đã ngồi sẵn ngay khi mở phòng nên số người online khớp với ghế trên sơ đồ.
 4. Xem video chung trên màn hình YouTube, bình chọn bài trong hàng đợi (bài
    nhiều vote nhất chiếu tiếp), vote bỏ qua (đủ 30% người thật thì chuyển bài),
    chat tối đa 160 ký tự, dùng emoji, làm 3 điệu bộ: nhún nhảy / vẫy tay / vỗ tay.
 5. Đổi góc camera của rạp 3D: toàn cảnh, từ ghế, tập trung màn hình, từ màn
    chiếu về hàng ghế (phím điều khiển WASD / Space / E như bản gốc được ghi
-   trong giao diện Sảnh ở Phase 2).
+   trong giao diện Sảnh ở Phase 2). Nút “⛶ Toàn màn hình” mở toàn màn hình
+   cho cả khu vực rạp, bấm **Esc** để thoát.
+6. Mỗi phòng có hàng đợi và video riêng: Rạp phim mở đầu bằng MV Sơn Tùng
+   M-TP, Rạp Trời mở đầu bằng “Thêm Một Lần Đau (Remake)” của NDMT; đổi phòng
+   là state của phòng cũ được giữ nguyên theo từng phòng, không lẫn nhau.
+
+## Màn hình chiếu hoạt động như thế nào (ghi rõ để khỏi nhầm)
+
+- **Video thật trên màn hình 3D:** YouTube không cho nhúng iframe làm texture
+  WebGL, nên mặt màn hình trong rạp 3D hiển thị **thumbnail của video đang
+  chiếu** (nạp bằng `THREE.TextureLoader`, lỗi thì về mặt phát sáng xanh).
+  Khi chọn góc camera **“Tập trung màn hình”**, trình phát YouTube thật sẽ phủ
+  lên đúng vùng rạp 3D (overlay iframe, cùng 1 player, không tạo lại), nên
+  video đang chạy lấp đầy khung hình — đó là video thật, không phải ảnh.
+- **Tự động chuyển bài:** trình phát dùng **YouTube IFrame Player API**,
+  bắt sự kiện `onStateChange` với `YT.PlayerState.ENDED` để chuyển sang bài
+  nhiều vote nhất. Không dùng timer đoán thời lượng. Nếu API của YouTube
+  không tải được (mạng chặn), trình phát fallback sang iframe nhúng thường
+  và tính năng tự chuyển bài khi hết video sẽ không hoạt động — xem console
+  để biết.
+- **Nút “Hiện/Ẩn điều khiển trình phát”** nằm trong thanh controls dưới
+  player (không bị iframe đè, có z-index riêng nên luôn bấm được). YouTube
+  API không cho đổi `controls` trực tiếp nên khi bấm, player sẽ tạo lại từ
+  đúng giây đang xem.
+- **Hàng đợi chống trùng:** không thêm được video đã có trong hàng đợi hoặc
+  đang chiếu (so theo video ID); hàng đợi mẫu của Rạp phim không còn 2 bản
+  của cùng 1 bài Sơn Tùng nữa (bản Audio đã thay bằng MV Quang Đăng Trần
+  “Anh Đã Không Biết Cách Yêu Em”, `OKjhlW1MveM`, 4:06).
+- **Thumbnail hàng đợi** có fallback: lỗi `default.jpg` thì thử `mqdefault.jpg`,
+  vẫn lỗi thì hiện ô placeholder 🎬 thay vì ảnh vỡ.
 
 ## Có gì trong Phase 1
 
@@ -39,8 +69,13 @@ npm run preview  # xem thử bản build
 - **Hàng đợi + bình chọn**, **vote bỏ qua 30%**, **chat + emoji 4 nhóm**
   (Cảm xúc 24, Trái tim 12, Cử chỉ, Tiệc tùng), **3 điệu bộ**.
 - **Rạp 3D thật bằng React Three Fiber** (`src/components/Cinema3D.jsx`):
-  màn hình phát sáng, rèm đỏ, quả cầu disco, ghế + avatar ngồi trên ghế,
-  camera lerp mượt giữa 4 góc preset. Không phải ảnh tĩnh giả 3D.
+  màn hình hiển thị thumbnail video đang chiếu, rèm nhung đỏ xếp ly 2 bên +
+  diềm trên màn hình, 2 loa tháp lớn có loa tròn 2 bên màn hình, quả cầu disco
+  treo cao trước màn hình (không che mặt màn hình), đèn tường ấm 2 bên, ghế +
+  avatar ngồi trên ghế, camera lerp mượt giữa 4 góc preset (góc “từ màn chiếu
+  về hàng ghế” đứng trước mặt màn hình nên nhìn rõ khán giả). Rạp Trời có bục
+  sân khấu gỗ, màn LED lớn hơn, bàn tròn gỗ sáng màu, trăng + sao. Không phải
+  ảnh tĩnh giả 3D.
 - **Nhiệm vụ ngày + EXP:** điểm danh +20 EXP, chat 1 lần +15 EXP, ngồi xem
   +1 EXP / 3 phút (tối đa 50 EXP/ngày), LV1 cần 300 EXP lên LV2.
   Tên khách, EXP và nhiệm vụ lưu ở `localStorage` trên trình duyệt của bạn.

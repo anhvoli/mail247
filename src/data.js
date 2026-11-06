@@ -75,7 +75,7 @@ export const ROOMS = {
     },
     queue: [
       { id: 'abPmZCZZrFA', title: 'SƠN TÙNG M-TP | ĐỪNG LÀM TRÁI TIM ANH ĐAU', by: 'M-TP Entertainment', duration: '5:26', votes: 0, byGuest: 'Cả rạp' },
-      { id: '7u4g483WTzw', title: 'Đừng Làm Trái Tim Anh Đau (Audio)', by: 'Sơn Tùng M-TP', duration: '5:26', votes: 4, byGuest: 'Mr. Sun' },
+      { id: 'OKjhlW1MveM', title: 'QUANG ĐĂNG TRẦN – ANH ĐÃ KHÔNG BIẾT CÁCH YÊU EM', by: 'Quang Đăng Trần', duration: '4:06', votes: 4, byGuest: 'Mr. Sun' },
       { id: '2WAXXlK3tAA', title: 'Thêm Một Lần Đau (Remake Version) – NDMT', by: 'NDMT', duration: '4:37', votes: 2, byGuest: 'NamCưBụ' },
     ],
   },
