@@ -1,172 +1,93 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import Header from './components/Header';
-import EmailControlBar from './components/EmailControlBar';
-import InboxStream from './components/InboxStream';
-import TerminalViewer from './components/TerminalViewer';
-import Footer from './components/Footer';
-import { API_BASE, DOMAINS, DEFAULT_EMAIL, STORAGE_KEY } from './constants/config';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import GuestSetup from './components/GuestSetup';
+import Lobby from './components/Lobby';
+import RoomView from './components/RoomView';
+import { useRoom } from './useRoom';
+import { BOT_CHAT_LINES, BOT_NAMES } from './data';
+
+const GUEST_KEY = 'rapchieu-guest';
+const EXP_KEY = 'rapchieu-exp';
+
+function todayStr() { return new Date().toISOString().slice(0, 10); }
+
+function loadExp() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(EXP_KEY) || 'null');
+    if (raw && raw.day === todayStr()) return raw;
+  } catch { /* ignore */ }
+  return { exp: 0, day: todayStr(), missions: {}, watchExp: 0, chatReady: false };
+}
 
 export default function App() {
-  // Quản lý trạng thái Email duy nhất đang theo dõi
-  const [activeEmail, setActiveEmail] = useState(() => {
-    return localStorage.getItem(STORAGE_KEY) || DEFAULT_EMAIL;
+  const [guest, setGuest] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(GUEST_KEY) || 'null'); } catch { return null; }
   });
+  const [expState, setExpState] = useState(loadExp);
+  const [roomId, setRoomId] = useState(null);
+  const roomState = useRoom(roomId || 'phim', guest?.name || 'Khách');
+  const roomStateRef = useRef(roomState);
+  roomStateRef.current = roomState;
 
-  const [messages, setMessages] = useState([]);
-  const [selectedMessage, setSelectedMessage] = useState(null);
-  const [loadingMessages, setLoadingMessages] = useState(false);
-  const [loadingDetail, setLoadingDetail] = useState(false);
+  useEffect(() => { localStorage.setItem(EXP_KEY, JSON.stringify(expState)); }, [expState]);
 
-  const [autoRefresh, setAutoRefresh] = useState(true);
-  const [countdown, setCountdown] = useState(5);
-
-  // Lưu email hiện tại vào localStorage
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, activeEmail);
-  }, [activeEmail]);
-
-  // Đổi sang một email khác
-  const handleSwitchEmail = useCallback((targetEmail) => {
-    setActiveEmail(targetEmail);
-    setSelectedMessage(null);
+  const addExp = useCallback((n) => {
+    setExpState((s) => ({ ...s, exp: s.exp + n }));
   }, []);
 
-  // Tạo email ngẫu nhiên duy nhất
-  const handleRandomize = useCallback(() => {
-    const prefixes = ['alpha', 'delta', 'neo', 'cyber', 'user', 'acc', 'fast'];
-    const rand = `${prefixes[Math.floor(Math.random() * prefixes.length)]}_${Math.floor(1000 + Math.random() * 9000)}`;
-    const full = `${rand}@${DOMAINS[0]}`;
-    handleSwitchEmail(full);
-  }, [handleSwitchEmail]);
-
-  // Lấy danh sách thư từ Cloudflare Worker API
-  const fetchMessages = useCallback(async (email) => {
-    if (!email) return;
-    setLoadingMessages(true);
-    try {
-      const res = await fetch(`${API_BASE}/api/inbox?email=${encodeURIComponent(email)}`);
-      const json = await res.json();
-      if (json.success) {
-        setMessages(json.data || []);
+  // Bot chat thỉnh thoảng (mô phỏng rạp đông).
+  useEffect(() => {
+    if (!roomId || !guest) return undefined;
+    const t = setInterval(() => {
+      if (Math.random() < 0.5) {
+        const name = BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)];
+        const line = BOT_CHAT_LINES[Math.floor(Math.random() * BOT_CHAT_LINES.length)];
+        roomStateRef.current.botSay(line, name);
       }
-    } catch (err) {
-      console.error('Lỗi tải danh sách thư:', err);
-    } finally {
-      setLoadingMessages(false);
-    }
-  }, []);
+    }, 14000);
+    return () => clearInterval(t);
+  }, [roomId, guest]);
 
-  // Đọc chi tiết thư theo ID
-  const fetchDetail = useCallback(async (id) => {
-    if (!id) return;
-    setLoadingDetail(true);
-    try {
-      const res = await fetch(`${API_BASE}/api/message/${id}`);
-      const json = await res.json();
-      if (json.success) {
-        setSelectedMessage(json.data);
-        fetch(`${API_BASE}/api/message/${id}/read`, { method: 'PATCH' }).catch(() => {});
-        setMessages((prev) =>
-          prev.map((m) => (m.id === id ? { ...m, is_read: 1 } : m))
-        );
-      }
-    } catch (err) {
-      console.error('Lỗi chi tiết thư:', err);
-    } finally {
-      setLoadingDetail(false);
-    }
-  }, []);
-
-  // Xóa một bức thư
-  const handleDeleteMessage = useCallback(async (id) => {
-    if (!id || !window.confirm('BẠN CÓ CHẮC MUỐN XÓA THƯ NÀY?')) return;
-    try {
-      await fetch(`${API_BASE}/api/message/${id}`, { method: 'DELETE' });
-      setMessages((prev) => prev.filter((m) => m.id !== id));
-      setSelectedMessage((current) => (current?.id === id ? null : current));
-    } catch (err) {
-      console.error('Lỗi xóa thư:', err);
-    }
-  }, []);
-
-  // Xóa toàn bộ thư trong hòm thư hiện tại
-  const handleClearInbox = useCallback(async () => {
-    if (!activeEmail || messages.length === 0) return;
-    if (!window.confirm(`XÓA TẤT CẢ THƯ TRONG HÒM THƯ ${activeEmail}?`)) return;
-    try {
-      await fetch(`${API_BASE}/api/inbox?email=${encodeURIComponent(activeEmail)}`, { method: 'DELETE' });
-      setMessages([]);
-      setSelectedMessage(null);
-    } catch (err) {
-      console.error('Lỗi dọn hòm thư:', err);
-    }
-  }, [activeEmail, messages.length]);
-
-  // Tải thư ngay khi đổi activeEmail
+  // Ngồi xem: +1 EXP / 3 phút, tối đa 50 EXP/ngày.
   useEffect(() => {
-    if (activeEmail) {
-      fetchMessages(activeEmail);
-      setCountdown(5);
-    } else {
-      setMessages([]);
-      setSelectedMessage(null);
-    }
-  }, [activeEmail, fetchMessages]);
-
-  // Bộ đếm làm mới tự động (Auto-refresh mỗi 5s)
-  useEffect(() => {
-    if (!autoRefresh || !activeEmail) return;
-    const timer = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          fetchMessages(activeEmail);
-          return 5;
-        }
-        return prev - 1;
+    if (!roomId || !guest) return undefined;
+    const t = setInterval(() => {
+      setExpState((s) => {
+        if (s.watchExp >= 50) return s;
+        return { ...s, exp: s.exp + 1, watchExp: s.watchExp + 1 };
       });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [autoRefresh, activeEmail, fetchMessages]);
+    }, 180000);
+    return () => clearInterval(t);
+  }, [roomId, guest]);
 
+  const enterGuest = (g) => {
+    setGuest(g);
+    localStorage.setItem(GUEST_KEY, JSON.stringify(g));
+  };
+
+  const claimMission = (id, exp) => {
+    if (id === 'watch') return; // xem tự cộng, không bấm nhận
+    if (expState.missions[id]) return;
+    if (id === 'chat' && !expState.chatReady) return;
+    setExpState((s) => ({ ...s, exp: s.exp + exp, missions: { ...s.missions, [id]: true } }));
+  };
+
+  const onChatSent = () => {
+    setExpState((s) => ({ ...s, chatReady: true }));
+  };
+
+  if (!guest) return <GuestSetup onEnter={enterGuest} />;
+  if (!roomId) {
+    return <Lobby guest={guest} exp={expState.exp} onEnterRoom={setRoomId} onLeave={() => { setGuest(null); localStorage.removeItem(GUEST_KEY); }} />;
+  }
   return (
-    <div className="min-h-screen flex flex-col bg-[#b9b8f2] text-[#111111] font-tech selection:bg-[#ff8a1e] selection:text-[#111111]">
-      {/* 1. Header trên cùng */}
-      <Header />
-
-      {/* 2. Thanh điều khiển Email (Thẻ hiện tại & Đổi email) */}
-      <EmailControlBar
-        activeEmail={activeEmail}
-        onSwitchEmail={handleSwitchEmail}
-        onRandomize={handleRandomize}
-        domains={DOMAINS}
-      />
-
-      {/* 3. Bố cục 2 Cửa sổ Retro Tech: DISC-01 vs DISC-02 */}
-      <main className="max-w-7xl mx-auto w-full px-4 md:px-6 pb-8 flex-1 grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {/* Cửa sổ DISC-01: Hộp thư đến */}
-        <InboxStream
-          activeEmail={activeEmail}
-          messages={messages}
-          selectedMessage={selectedMessage}
-          loadingMessages={loadingMessages}
-          autoRefresh={autoRefresh}
-          countdown={countdown}
-          onRefresh={() => fetchMessages(activeEmail)}
-          onClearInbox={handleClearInbox}
-          onToggleAutoRefresh={() => setAutoRefresh(!autoRefresh)}
-          onSelectMessage={fetchDetail}
-        />
-
-        {/* Cửa sổ DISC-02: Chi tiết thư & Màn hình Terminal OTP */}
-        <TerminalViewer
-          selectedMessage={selectedMessage}
-          loadingDetail={loadingDetail}
-          onDeleteMessage={handleDeleteMessage}
-        />
-      </main>
-
-      {/* 4. Footer */}
-      <Footer />
-    </div>
+    <RoomView
+      guest={guest}
+      roomState={roomState}
+      onLeave={() => setRoomId(null)}
+      exp={expState.exp}
+      missionsDone={{ ...expState.missions, chatReady: expState.chatReady }}
+      onMissionDone={claimMission}
+      onChatSent={onChatSent}
+    />
   );
 }
