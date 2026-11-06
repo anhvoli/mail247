@@ -69,8 +69,14 @@ export function useRoom(roomId, guestName, resumeVideo) {
     setSeats(seedSeats(r));
     setMySeat(null);
     setQueue(r.queue.map((q) => ({ ...q })));
-    setCurrent(resumeVideoRef.current
-      ? { ...resumeVideoRef.current, nonce: 0 }
+    // Chỉ tiếp tục bài đã nhớ khi bài đó thuộc phòng này — bài của phòng cũ
+    // mà lọt vào resume là bài đang chiếu nhảy qua lại giữa 2 phòng (fix
+    // 07/11 ~00:30); không thuộc thì quay về bài mẫu của phòng.
+    const saved = resumeVideoRef.current;
+    const savedBelongs = saved && (saved.id === r.nowPlaying.id
+      || r.queue.some((q) => q.id === saved.id));
+    setCurrent(savedBelongs
+      ? { ...saved, nonce: 0 }
       : { ...r.nowPlaying, nonce: 0 });
     setVoted(new Set());
     setSkipVotes(0);
@@ -128,6 +134,14 @@ export function useRoom(roomId, guestName, resumeVideo) {
   useEffect(() => {
     if (skipVotesRef.current > 0) return;
     if (resumeVideo && resumeVideo.id !== currentRef.current.id) {
+      // Chỉ áp bài đã nhớ khi bài đó thuộc phòng này (kể cả video do người
+      // xem tự thêm — có trong hàng đợi live); bài phòng khác thì bỏ qua,
+      // không để bài đang chiếu nhảy sang phòng khác (fix 07/11 ~00:30).
+      const r = ROOMS[roomId];
+      const belongs = resumeVideo.id === r.nowPlaying.id
+        || r.queue.some((q) => q.id === resumeVideo.id)
+        || queueRef.current.some((q) => q.id === resumeVideo.id);
+      if (!belongs) return;
       setCurrent({ ...resumeVideo, nonce: 0 });
       setSkipVotes(0);
     }

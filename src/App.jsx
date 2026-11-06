@@ -143,6 +143,18 @@ export default function App() {
   useEffect(() => {
     if (!roomId || roomId === 'sanh') return;
     const cur = roomState.current;
+    // Chỉ đồng bộ bài thuộc đúng phòng này: lúc vừa đổi phòng, roomState
+    // vẫn giữ bài của phòng cũ (reset effect của useRoom chưa chạy) — ghi
+    // bừa là bài phòng cũ chui vào liveNowPlaying của phòng mới, rồi resume
+    // effect áp lại làm bài đang chiếu nhảy qua lại giữa 2 phòng (fix 07/11
+    // ~00:30: Karaoke nhảy sang bài Sơn Tùng của Rạp phim). Hàng đợi live
+    // (roomState.queue) được tính để video do người xem tự thêm vẫn khớp.
+    const r = ROOMS[roomId];
+    const liveQueue = roomState.queue || [];
+    const belongs = r && (cur.id === r.nowPlaying.id
+      || r.queue.some((q) => q.id === cur.id)
+      || liveQueue.some((q) => q.id === cur.id));
+    if (!belongs) return;
     setLiveNowPlaying((prev) => {
       const old = prev[roomId];
       if (old && old.id === cur.id) return prev;

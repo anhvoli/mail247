@@ -293,7 +293,19 @@ export default function YouTubePlayer({ videoId, onEnded, onPlayerReady, control
     lastTimeRef.current = 0;
     const p = playerRef.current;
     if (p && p.loadVideoById) {
-      try { p.loadVideoById(videoId); loadedVideoIdRef.current = videoId; } catch { /* ignore */ }
+      try { p.loadVideoById(videoId); loadedVideoIdRef.current = videoId; }
+      catch {
+        // Nạp lỗi mà nuốt luôn thì iframe kẹt ở video cũ trong khi UI đã
+        // hiện bài mới (lệch bài/iframe vài giây trở lên — fix 07/11 ~00:30).
+        // Ghi pending để onReady lần sau nạp lại, và thử lại 1 lần sau 1s.
+        pendingVideoIdRef.current = videoId;
+        setTimeout(() => {
+          const pp = playerRef.current;
+          if (pp && pp.loadVideoById && pendingVideoIdRef.current === videoIdRef.current) {
+            try { pp.loadVideoById(videoIdRef.current); loadedVideoIdRef.current = videoIdRef.current; pendingVideoIdRef.current = null; } catch { /* vẫn pending, player tạo lại sẽ nạp */ }
+          }
+        }, 1000);
+      }
       return;
     }
     if (fallbackIframeRef.current) {

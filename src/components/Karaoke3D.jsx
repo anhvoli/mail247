@@ -203,7 +203,7 @@ function ScoreBoard({ singerName, averageScore, scorerCount }) {
   );
 }
 
-function Stage({ room, seats, mySeat, guest, videoId, showLive, onEnded, onPlayerReady, controls, startSeconds, singerName, averageScore, scorerCount }) {
+function Stage({ room, seats, mySeat, guest, videoId, showLive, onEnded, onPlayerReady, controls, startSeconds, singerName, averageScore, scorerCount, showNames }) {
   const gotTalentTex = useMemo(() => makeTextTexture({
     w: 1024, h: 128, text: '★  GOT TALENT  ★', sub: '',
     bg: '#1a0505', fg: '#ffd75e', font: 72,
@@ -223,7 +223,7 @@ function Stage({ room, seats, mySeat, guest, videoId, showLive, onEnded, onPlaye
         <Seat key={id} position={pos}
           color={occ ? (occ.kind === 'me' ? guest.color.hex : '#d7bc75') : null}
           mine={occ?.kind === 'me'}
-          name={occ ? occ.name : null} />,
+          name={showNames && occ ? occ.name : null} />,
       );
       if (!occ) seatMeshes.push(<EmptySeatRing key={`ring-${id}`} position={pos} />);
     }
@@ -315,13 +315,16 @@ function Stage({ room, seats, mySeat, guest, videoId, showLive, onEnded, onPlaye
 }
 
 export default function Karaoke3D({ room, seats, mySeat, guest, cameraPreset, videoId, showLive, onEnded, onPlayerReady, controls, startSeconds, singerName, averageScore, scorerCount, reAim }) {
+  // Bảng tên chỉ hiện ở góc toàn cảnh + tập trung màn hình — ở góc ghế nó
+  // phình to che hết khung hình (fix 07/11 ~00:30, giống Cinema3D/Arena3D).
+  const showNames = cameraPreset === 'overview' || cameraPreset === 'screen';
   return (
     <Canvas camera={{ position: KARAOKE_CAMERA_PRESETS[cameraPreset].pos, fov: 55 }}>
       <color attach="background" args={['#0a0505']} />
       <Rig preset={cameraPreset} reAim={reAim} />
       <Stage room={room} seats={seats} mySeat={mySeat} guest={guest} videoId={videoId}
         showLive={showLive} onEnded={onEnded} onPlayerReady={onPlayerReady}
-        controls={controls} startSeconds={startSeconds}
+        controls={controls} startSeconds={startSeconds} showNames={showNames}
         singerName={singerName} averageScore={averageScore} scorerCount={scorerCount} />
     </Canvas>
   );
