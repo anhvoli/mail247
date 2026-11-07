@@ -153,6 +153,60 @@ Other environment caveats:
    this SwiftShader harness (lobby is 60), and nametag count ≤10. If SwiftShader
    FPS doesn't move, the fix didn't address the CPU bottleneck.
 
+## Re-measurement 2026-11-07 ~01:00–01:25 (sau tối ưu đợt này)
+
+Harness mới `/tmp/perf-measure/measure3.mjs` (tái dựng từ mô tả measure2:
+CDP + chrome-headless-shell, 1280×800, seed guest, bấm thẻ sảnh, rAF FPS +
+longtask; thêm phase giữ W 10s). Lưu ý: `/tmp/perf-measure/` gốc đã mất
+nên measure2.mjs/results2.json không còn; số baseline dưới đây đo bằng
+measure3 trên bản build trước tối ưu, KHÔNG so chéo trực tiếp với bảng
+trên (audit cũ đo 8.8/16.4 FPS — chênh lệch có thể do tải VM lúc đo và
+phiên bản Chrome/SwiftShader khác; so sánh trước/sau trong đợt này dùng
+cùng harness nên hợp lệ).
+
+### Kết quả (2 lần chạy mỗi bên, build gộp 3 agent, KHÔNG push/deploy)
+
+| Scene (20s idle / 10s đi) | Baseline (trước) | Sau tối ưu | Ghi chú |
+|---|---|---|---|
+| Arena idle — FPS rAF | 7.0 / 7.3 | **60.0 / 59.4** | frameloop="demand": R3F gần như không vẽ frame khi đứng yên |
+| Arena idle — long-task total / 20s | 19.8s / 19.8s (~99% chặn) | **0.0s / 0.27s** | main thread rảnh — đây mới là chỉ số thật, không phải FPS rAF |
+| Arena đi lại (giữ W) — FPS | 5.3 / 5.0 | 5.7 / 5.4 | chi phí render/frame không đổi (~175ms/frame SwiftShader) |
+| Arena đi lại — long-task / 10s | ~10.3s | 10.1s / 10.3s | demand không làm frame đi lại rẻ hơn |
+| Rạp phim idle — FPS (đối chứng, không sửa) | 4.9 | 5.0 / 4.6 | không đổi như dự kiến |
+| Rạp phim idle — long-task / 20s | ~19.8s | 20.0s / 20.0s | Cinema3D vẫn always-on + 33 Html nametag |
+
+### Fix đã gộp (xem báo cáo coordinator — file chi tiết trong src/)
+- `Arena3D.jsx`: `frameloop="demand"` + `invalidate()` (Rig, effect theo
+  layout/showLive/videoId/showNames, ScreenFace khi thumbnail về); cache
+  texture bảng tên theo tên (hết vẽ lại 30 texture mỗi lần bot đổi ghế);
+  cache thumbnail màn hình theo videoId (2 mặt tải 1 lần); 3 vòng khán đài
+  + tường + bục → Lambert, trần → Basic (sàn GIỮ Standard vì Lambert làm
+  loang vệt đỏ/xanh sai trên CircleGeometry).
+- `AvatarWalk.jsx`: `invalidate()` khi đi/kéo/nhảy + mồi 1 frame lúc bắt
+  đầu đi; idle-stop (đứng yên thì thoát chế độ đi); Q/E/Space vào chế độ đi
+  (fix regression E-ngồi do idle-stop gây ra); key lưới số thay cho chuỗi.
+- `youtube.jsx`: dừng upgrade interval sau 3 chu kỳ lỗi (hết tích thẻ
+  `<script>` khi YouTube bị chặn).
+- `RoomView.jsx`: memo hoá element `<SeatMap>` (gõ chat không reconcile
+  lại sơ đồ ghế nữa; kiểm chứng Arena render 1 lần lúc mount, 0 lần khi gõ).
+- `useRoom.js`: chat tối đa 200 tin (`appendCapped`).
+- ĐÃ ĐO, KHÔNG PHẢI bottleneck nên không sửa: bot đổi ghế → reconcile
+  Canvas (8–17ms/lần, ~0.07% main thread); 3 interval 1s (playhead/panel/
+  watchdog) không đáng kể so với frame ~140ms.
+
+### Hành vi đổi có chủ ý (nhỏ)
+- Chip "Đang đi lại" tắt khi đứng yên (trước dính lại; bắt buộc để demand
+  dừng render). Q/E/Space có tác dụng ngay cả trước lần đi WASD đầu tiên.
+  Chat mất tin rất cũ sau >200 tin.
+
+### Còn mở
+1. Frame đi lại vẫn đắt (~5.5 FPS SwiftShader) — cần giảm chi phí
+   render/frame (ít đèn/fragment hơn, canvas nhỏ hơn) và đo trên GPU thật.
+2. Rạp phim chưa tối ưu (sprite nametag + demand + vật liệu, như arena).
+3. Karaoke/Sảnh chưa đo/tối ưu. Chưa có số đo GPU thật nào.
+4. Shell headless không ổn định (chết bất ngờ 3/5 lần chạy đo ở 1 agent,
+   1 lần context-lost) — số liệu cần chạy lại mới tin được.
+
 ## Files
 - Report: `~/workspace/choigivui-clone-source/PERF-AUDIT.md` (this file)
 - Harness: `/tmp/perf-measure/measure2.mjs`, raw data `/tmp/perf-measure/results2.json`

@@ -11,6 +11,18 @@ function shuffle(arr) {
   return a;
 }
 
+// HIỆU NĂNG (chat): danh sách tin nhắn từng không giới hạn — bot chat +
+// tin hệ thống cứ thêm mãi, tab Trò chuyện render toàn bộ nên sau phiên dài
+// có hàng trăm node DOM trong chat-list. Giới hạn 200 tin (bỏ tin cũ nhất):
+// phiên bình thường không bao giờ chạm ngưỡng nên hành vi nhìn thấy được
+// không đổi; chỉ mất tin rất cũ sau khi đã có >200 tin.
+const MAX_MESSAGES = 200;
+function appendCapped(list, msg) {
+  return list.length >= MAX_MESSAGES
+    ? [...list.slice(-(MAX_MESSAGES - 1)), msg]
+    : [...list, msg];
+}
+
 function allSeatIds(room) {
   if (room.kind === 'cinema') {
     const ids = [];
@@ -155,13 +167,13 @@ export function useRoom(roomId, guestName, resumeVideo) {
     setCurrent({ id: next.id, title: next.title, by: next.by, duration: next.duration, nonce: Date.now() });
     setVoted(new Set());
     setSkipVotes(0);
-    setMessages((m) => [...m, {
+    setMessages((m) => appendCapped(m, {
       id: msgId.current++, name: 'Hệ thống',
       text: reason === 'skip'
         ? `Đã bỏ qua bài theo vote — cả rạp cùng xem: ${next.title} (do ${next.byGuest} đề xuất)`
         : `Cả rạp cùng xem: ${next.title} (do ${next.byGuest} đề xuất)`,
       time: new Date(), bot: false, system: true,
-    }]);
+    }));
     setQueue(q.map((item) => ({ ...item, votes: 0 })));
   }, []);
 
@@ -206,11 +218,11 @@ export function useRoom(roomId, guestName, resumeVideo) {
   }, [guestName]);
 
   const sendMessage = useCallback((text) => {
-    setMessages((m) => [...m, { id: msgId.current++, name: guestName, text, time: new Date(), bot: false }]);
+    setMessages((m) => appendCapped(m, { id: msgId.current++, name: guestName, text, time: new Date(), bot: false }));
   }, [guestName]);
 
   const botSay = useCallback((line, name) => {
-    setMessages((m) => [...m, { id: msgId.current++, name, text: line, time: new Date(), bot: true }]);
+    setMessages((m) => appendCapped(m, { id: msgId.current++, name, text: line, time: new Date(), bot: true }));
   }, []);
 
   // Vote bỏ qua: đếm bằng state riêng, watcher effect bên dưới sẽ chuyển bài

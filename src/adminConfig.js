@@ -24,7 +24,14 @@ export const DEFAULT_ADMIN_CONFIG = {
 export function loadAdminConfig() {
   try {
     const raw = JSON.parse(localStorage.getItem(ADMIN_CONFIG_KEY) || 'null');
-    if (raw && typeof raw === 'object') return { ...DEFAULT_ADMIN_CONFIG, ...raw };
+    if (raw && typeof raw === 'object') {
+      const merged = { ...DEFAULT_ADMIN_CONFIG, ...raw };
+      // Tốc độ giọng đọc phải là số trong [0.5, 2] — localStorage hỏng
+      // (chuỗi/số lạ) sẽ làm toFixed()/u.rate vỡ ở chỗ khác.
+      const r = Number(merged.ttsRate);
+      merged.ttsRate = Number.isFinite(r) ? Math.min(2, Math.max(0.5, r)) : DEFAULT_ADMIN_CONFIG.ttsRate;
+      return merged;
+    }
   } catch { /* ignore */ }
   return { ...DEFAULT_ADMIN_CONFIG };
 }

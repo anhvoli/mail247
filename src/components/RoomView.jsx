@@ -261,6 +261,14 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
       : room.kind === 'arena' ? <Arena3D {...common} /> : <Cinema3D {...common} />;
   }, [room, seats, mySeat, guest, camera, current.id, controlsOn, handleEnded, handlePlayerReady, handlePickSeat, singerName, averageScore, scorerCount, cameraNonce]);
 
+  // Sơ đồ ghế 2D cũng memo như cảnh 3D: SeatMap có 72 (arena) / 100 (rạp
+  // phim) nút, trước đây RoomView render lại vì gõ chat / đổi tab / toast
+  // là reconcile lại toàn bộ sơ đồ dù ghế không đổi. pickSeat ổn định
+  // (useCallback trong useRoom) nên memo này chỉ vỡ khi đúng ghế/phòng đổi.
+  const seatMap = useMemo(() => (
+    <SeatMap room={room} seats={seats} mySeat={mySeat} onPick={pickSeat} />
+  ), [room, seats, mySeat, pickSeat]);
+
   const showToast = (text, ms = 3500) => {
     setToast(text);
     setTimeout(() => setToast(''), ms);
@@ -415,7 +423,7 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
             ))}
           </div>
           <div className="toast">{toast}</div>
-          <SeatMap room={room} seats={seats} mySeat={mySeat} onPick={pickSeat} />
+          {seatMap}
         </div>
 
         <div className="side">

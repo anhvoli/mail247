@@ -90,11 +90,15 @@ function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
 // tra 3x3 ô quanh avatar (~2–6 collider) thay vì quét toàn bộ 72–100 cái.
 // Ô 2 > khoảng đẩy tối đa (1.6 bàn + 0.35 avatar = 1.95) nên collider nào
 // chạm được avatar chắc chắn nằm trong 3x3 ô này.
+// Khóa ô là SỐ (cellX * 64 + cellZ) thay vì chuỗi `${x},${z}` để khỏi cấp
+// phát 9 chuỗi/frame lúc tra cứu — ô z chỉ loanh quanh ±9 nên nhân 64 không
+// đụng khóa (yêu cầu |cellZ| < 64, đúng với mọi phòng hiện tại).
 const GRID_CELL = 2;
+const GRID_STRIDE = 64;
 function addGrid(nav) {
   const grid = new Map();
   for (const c of nav.colliders) {
-    const key = `${Math.floor(c.x / GRID_CELL)},${Math.floor(c.z / GRID_CELL)}`;
+    const key = Math.floor(c.x / GRID_CELL) * GRID_STRIDE + Math.floor(c.z / GRID_CELL);
     let arr = grid.get(key);
     if (!arr) { arr = []; grid.set(key, arr); }
     arr.push(c);
@@ -114,6 +118,13 @@ export default function AvatarWalk({ room, seats, guest, mySeat, cameraPreset, o
   const nav = useMemo(() => addGrid(buildNav(room)), [room]);
   const camera = useThree((s) => s.camera);
   const gl = useThree((s) => s.gl);
+  // frameloop="demand" (Canvas đặt ở Arena3D.jsx): vòng render chỉ chạy khi
+  // có invalidate(). Lấy sẵn hàm invalidate để "mồi" 1 frame khi bắt đầu
+  // đi lại (sự kiện bàn phím/chuột nằm ngoài vòng render nên không tự
+  // kích hoạt frame nào); trong useFrame thì invalidate() ở cuối mỗi frame
+  // đang đi để vòng lặp tiếp tục. Ở bản build always-on thì các lệnh này
+  // thừa nhưng vô hại.
+  const invalidate = useThree((s) => s.invalidate);
   const pos = useRef(new THREE.Vector3(nav.spawn[0], 0, nav.spawn[2]));
   const groundY = useRef(0);
   const jumpY = useRef(0);
@@ -141,6 +152,9 @@ export default function AvatarWalk({ room, seats, guest, mySeat, cameraPreset, o
     walkRef.current = v;
     setWalking(v);
     onWalkChangeRef.current?.(v);
+    // Bắt đầu đi: mồi 1 frame (xem invalidate ở trên) để useFrame được
+    // chạy; từ đó useFrame tự invalidate mỗi frame trong lúc còn đi.
+    if (v) invalidate();
   };
 
   // Đổi góc camera preset (bấm nút góc) hoặc ngồi xuống ghế thì thoát chế
@@ -162,7 +176,13 @@ export default function AvatarWalk({ room, seats, guest, mySeat, cameraPreset, o
       if (k === ' ') keys.current.add('jump');
       else if (k === 'shift') keys.current.add('run');
       else if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'q', 'e'].includes(k)) keys.current.add(k);
-      if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k) && !mySeatRef.current) {
+      // Q/E xoay góc nhìn, Space nhảy: cũng vào chế độ đi lại để useFrame
+      // chạy được — bắt buộc sau khi đã dừng vì đứng yên (idle-stop trong
+      // useFrame): nếu không, bấm E khi đang đứng yên sẽ không ngồi được vì
+      // nhánh ngồi ở dưới yêu cầu walkRef.current, và Q/Space cũng không có
+      // tác dụng gì khi chưa từng đi. Không đổi hành vi khi đã đi rồi (lúc
+      // đó walkRef vốn đã true).
+      if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'q', 'e', ' '].includes(k) && !mySeatRef.current) {
         setWalk(true);
       }
       // E: ưu tiên ngồi ghế trống gần nhất (trong 1.4 đơn vị); nếu không có
@@ -224,7 +244,7 @@ export default function AvatarWalk({ room, seats, guest, mySeat, cameraPreset, o
     };
   }, [gl]);
 
-  useFrame((_, delta) => {
+  useFrame((state, delta) => {
     if (!walkRef.current) return;
     const dt = Math.min(delta, 0.05);
     const k = keys.current;
@@ -284,7 +304,7 @@ export default function AvatarWalk({ room, seats, guest, mySeat, cameraPreset, o
     const cellZ = Math.floor(pos.current.z / GRID_CELL);
     for (let ox = -1; ox <= 1; ox++) {
       for (let oz = -1; oz <= 1; oz++) {
-        const arr = nav.grid.get(`${cellX + ox},${cellZ + oz}`);
+        const arr = nav.grid.get((cellX + ox) * GRID_STRIDE + (cellZ + oz));
         if (!arr) continue;
         for (let i = 0; i < arr.length; i++) {
           const c = arr[i];
@@ -315,6 +335,21 @@ export default function AvatarWalk({ room, seats, guest, mySeat, cameraPreset, o
       p.z + cosY * CAMERA_DIST,
     );
     camera.lookAt(p.x, gy + 1.4, p.z);
+    // frameloop="demand": giữ vòng render chỉ khi còn đang tương tác.
+    // Còn phím di chuyển/xoay/nhảy đang giữ, còn kéo chuột, hoặc còn đang
+    // bay sau cú nhảy → invalidate để frame sau chạy tiếp. Đã đứng yên hẳn
+    // thì thoát chế độ đi lại để scene tĩnh không render thừa (Rig chỉ ngắm
+    // lại camera khi preset/reAim đổi nên camera giữ nguyên vị trí lúc
+    // dừng — không bị giật về góc preset). Chip "Đang đi lại" cũng theo đó
+    // mà chỉ hiện khi đang đi thật, thay vì dính lại sau khi buông phím.
+    const stillActive =
+      k.has('w') || k.has('a') || k.has('s') || k.has('d') ||
+      k.has('arrowup') || k.has('arrowdown') || k.has('arrowleft') || k.has('arrowright') ||
+      k.has('q') || k.has('e') || k.has('jump') ||
+      dragRef.current !== null ||
+      jumpY.current > 0 || vy.current !== 0;
+    if (!stillActive) setWalk(false);
+    else state.invalidate();
   });
 
   // Đã ngồi ghế thì ẩn avatar đi lại (hình người ngồi trên ghế là đại diện).

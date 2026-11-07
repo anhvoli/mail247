@@ -240,6 +240,17 @@ export default function YouTubePlayer({ videoId, onEnded, onPlayerReady, control
       iframe.style.display = 'block';
       container.appendChild(iframe);
       fallbackIframeRef.current = iframe;
+      // Chống tích tụ thẻ <script> khi YouTube bị chặn: mỗi lần
+      // loadYouTubeApi() reject là 1 chu kỳ nạp đã thử đủ 3 lượt trong nội
+      // bộ (mỗi lượt append 1 thẻ <script> iframe_api vào <head>). Interval
+      // cũ gọi lại mãi mỗi 2s nên thẻ script tích tụ không giới hạn trong
+      // môi trường chặn YouTube. Sau 3 chu kỳ lỗi liên tiếp thì dừng hẳn
+      // interval và giữ iframe thường. Trên máy thật API tải được thì nhánh
+      // window.YT ở trên đã nâng cấp từ lâu, không chạm tới giới hạn này.
+      // (Các lượt gọi trong lúc 1 chu kỳ còn đang chờ trả về cùng 1 promise
+      // nên chỉ tính 1 lần — lastFailedPromise để phân biệt các chu kỳ.)
+      let upgradeFailures = 0;
+      let lastFailedPromise = null;
       upgradeTimer = setInterval(() => {
         if (cancelled) return;
         if (window.YT && window.YT.Player && fallbackIframeRef.current) {
@@ -259,7 +270,17 @@ export default function YouTubePlayer({ videoId, onEnded, onPlayerReady, control
           return;
         }
         // API vẫn chưa có: thử nạp lại (loadYouTubeApi tự retry tối đa 3 lượt).
-        loadYouTubeApi().catch(() => { /* vẫn chưa được, đợi lượt sau */ });
+        const p = loadYouTubeApi();
+        p.catch(() => {
+          if (cancelled) return;
+          if (p === lastFailedPromise) return; // cùng 1 chu kỳ: chỉ tính 1 lần
+          lastFailedPromise = p;
+          upgradeFailures += 1;
+          if (upgradeFailures >= 3 && upgradeTimer) {
+            clearInterval(upgradeTimer);
+            upgradeTimer = null;
+          }
+        });
       }, 2000);
     };
 

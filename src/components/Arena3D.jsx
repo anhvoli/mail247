@@ -3,6 +3,7 @@ import { Canvas, useThree } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { ARENA_RINGS, ARENA_SEATS_PER_RING, arenaSeatId } from '../data';
+import { T1_CHEER_IMG, BLG_CHEER_IMG } from '../cheerImages';
 import YouTubePlayer from '../youtube';
 import AvatarWalk from './AvatarWalk';
 
@@ -29,6 +30,22 @@ import AvatarWalk from './AvatarWalk';
 //  - đèn trần: 1 instancedMesh thay cho 16 mesh;
 //  - đèn point: 6 → 3 (giữ đỏ/xanh 2 bên + ấm ở giữa), không có shadow;
 //  - Canvas dpr={[1, 1.5]} để máy yếu / màn hình mật độ cao không render quá khổ.
+//
+// HIỆU NĂNG (tối ưu track 5, 07/11 — baseline đo lại: idle ~7.2 FPS, đi lại
+// ~5.2 FPS, main thread chặn ~99%): bottleneck còn lại là bản thân frame
+// render dưới SwiftShader, không phải Html. Thêm:
+//  - frameloop="demand": cảnh gần như tĩnh (chỉ bot đổi ghế ~9s, đổi góc,
+//    đổi bài) nên không vẽ frame thừa; Rig / Arena / ScreenFace gọi
+//    invalidate() đúng lúc có thứ đổi. Đi lại cần AvatarWalk invalidate
+//    trong useFrame (nửa còn lại, ở AvatarWalk.jsx).
+//  - bảng tên: texture cache theo tên ở module (không vẽ lại ~30 canvas mỗi
+//    lần bot đổi ghế), chỉ dispose khi unmount.
+//  - thumbnail màn hình: 2 mặt dùng chung 1 texture theo videoId (cache
+//    module + đếm tham chiếu).
+//  - mặt phẳng lớn tối: tường trụ + bục sân + 3 vòng khán đài Standard →
+//    Lambert (sáng theo đỉnh), trần tối → Basic phẳng; SÀN GIỮ Standard vì
+//    CircleGeometry là quạt tam giác — Lambert làm vệt đỏ/xanh loang sai,
+//    Basic thì mất hẳn vệt sáng.
 
 // 4 góc camera — cùng tên preset với rạp phim để RoomView dùng chung nút bấm,
 // chỉ khác vị trí cho hợp với đấu trường (khán đài vòng tròn quanh sân giữa).
@@ -46,16 +63,20 @@ export const ARENA_CAMERA_PRESETS = {
 
 function Rig({ preset, reAim }) {
   const camera = useThree((s) => s.camera);
+  const invalidate = useThree((s) => s.invalidate);
   useEffect(() => {
     const p = ARENA_CAMERA_PRESETS[preset];
     camera.position.set(p.pos[0], p.pos[1], p.pos[2]);
     camera.lookAt(p.look[0], p.look[1], p.look[2]);
     camera.updateProjectionMatrix();
+    // frameloop="demand": camera đổi thì phải vẽ lại 1 frame ngay, nếu không
+    // góc mới chỉ hiện khi có invalidate khác.
+    invalidate();
     // reAim đổi mỗi lần bấm nút góc (kể cả bấm lại góc đang chọn) hoặc ngồi
     // xuống ghế sau khi đi lại — vì AvatarWalk chỉnh camera trực tiếp nên
     // chỉ đổi preset mới ngắm lại được, bấm lại góc cũ là state no-op và
     // camera kẹt ở vị trí đi lại (fix 07/11 ~00:30).
-  }, [preset, camera, reAim]);
+  }, [preset, camera, reAim, invalidate]);
   return null;
 }
 
@@ -122,25 +143,105 @@ function makeTextTexture({ lines, bg = '#0d0d0d', fg = '#ffffff', accent = '#ffd
 }
 
 // Mặt màn hình: thumbnail video đang chiếu làm lớp nền dưới iframe live.
-function ScreenFace({ videoId, width, height, position, rotationY = 0 }) {
-  const [texture, setTexture] = useState(null);
-  useEffect(() => {
-    let alive = true;
+// Thumbnail dùng CHUNG theo videoId (cache module + đếm tham chiếu): trước
+// đây mặt trước + mặt sau mỗi mặt 1 TextureLoader riêng cùng URL → tải và
+// giải mã ảnh 2 lần. Nay chỉ tải 1 lần; mặt nào unmount / videoId đổi thì
+// trả lượt, hết lượt thì dispose texture.
+const screenThumbCache = new Map(); // videoId -> { tex, failed, refs, listeners }
+function acquireScreenThumb(videoId, onReady) {
+  let entry = screenThumbCache.get(videoId);
+  if (!entry) {
+    entry = { tex: null, failed: false, refs: 0, listeners: new Set() };
+    screenThumbCache.set(videoId, entry);
     const loader = new THREE.TextureLoader();
     loader.setCrossOrigin('anonymous');
     loader.load(
       `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-      (tex) => { if (alive) setTexture(tex); },
+      (tex) => {
+        const cur = screenThumbCache.get(videoId);
+        if (!cur) { tex.dispose(); return; } // đã hết lượt trong lúc tải
+        cur.tex = tex;
+        cur.listeners.forEach((fn) => fn(tex));
+        cur.listeners.clear();
+      },
       undefined,
-      () => { if (alive) setTexture(null); },
+      () => {
+        const cur = screenThumbCache.get(videoId);
+        if (!cur) return;
+        cur.failed = true;
+        cur.listeners.forEach((fn) => fn(null));
+        cur.listeners.clear();
+      },
     );
-    return () => { alive = false; };
+  }
+  entry.refs += 1;
+  if (entry.tex) onReady(entry.tex);
+  else if (entry.failed) onReady(null);
+  else entry.listeners.add(onReady);
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    entry.listeners.delete(onReady);
+    entry.refs -= 1;
+    if (entry.refs <= 0) {
+      if (entry.tex) entry.tex.dispose();
+      screenThumbCache.delete(videoId);
+    }
+  };
+}
+
+function ScreenFace({ videoId, width, height, position, rotationY = 0 }) {
+  const [texture, setTexture] = useState(null);
+  const invalidate = useThree((s) => s.invalidate);
+  useEffect(() => {
+    setTexture(null);
+    return acquireScreenThumb(videoId, (tex) => setTexture(tex));
   }, [videoId]);
+  // frameloop="demand": thumbnail về sau mount thì vẽ lại 1 frame để hiện.
+  useEffect(() => { if (texture) invalidate(); }, [texture, invalidate]);
   if (!texture) {
     return (
       <mesh position={position} rotation={[0, rotationY, 0]}>
         <planeGeometry args={[width, height]} />
         <meshStandardMaterial color="#0b0b0b" emissive="#9db8ff" emissiveIntensity={0.55} />
+      </mesh>
+    );
+  }
+  return (
+    <mesh position={position} rotation={[0, rotationY, 0]}>
+      <planeGeometry args={[width, height]} />
+      <meshBasicMaterial map={texture} toneMapped={false} />
+    </mesh>
+  );
+}
+
+// Banner fan: ảnh nhân vật cổ vũ ngồi (data-URI JPEG base64 trong
+// cheerImages.js — file text nên đẩy được qua snapshot). Tải bằng
+// TextureLoader như thumbnail màn hình; frameloop="demand" nên texture về
+// thì invalidate() để vẽ lại 1 frame. Chưa tải xong thì hiện mặt phẳng tối
+// tạm (giống ScreenFace).
+function CheerBanner({ dataUri, position, rotationY = 0, width = 4.5, height = 3 }) {
+  const [texture, setTexture] = useState(null);
+  const invalidate = useThree((s) => s.invalidate);
+  useEffect(() => {
+    let alive = true;
+    const loader = new THREE.TextureLoader();
+    const tex = loader.load(dataUri, (t) => {
+      if (!alive) { t.dispose(); return; }
+      t.colorSpace = THREE.SRGBColorSpace;
+      t.anisotropy = 4;
+      setTexture(t);
+    });
+    return () => { alive = false; tex.dispose(); };
+  }, [dataUri]);
+  // frameloop="demand": texture về sau mount thì vẽ lại 1 frame để hiện.
+  useEffect(() => { if (texture) invalidate(); }, [texture, invalidate]);
+  if (!texture) {
+    return (
+      <mesh position={position} rotation={[0, rotationY, 0]}>
+        <planeGeometry args={[width, height]} />
+        <meshStandardMaterial color="#111111" />
       </mesh>
     );
   }
@@ -348,15 +449,34 @@ function makeNameTexture(name) {
   return { tex, aspect: w / h };
 }
 
+// Cache texture bảng tên theo tên (module-level): bot đổi ghế mỗi ~9s làm
+// computeSeatLayout trả occupants mới → useMemo của NameSprites chạy lại.
+// Trước đây mỗi lần đó vẽ lại toàn bộ ~30 canvas texture + dispose cũ (tốn
+// CPU/GPU ngay lúc idle). Nay texture vẽ 1 lần / tên và dùng lại cho mọi ghế;
+// chỉ dispose toàn bộ khi rời phòng (unmount). Tên ít (~30) nên giữ trong
+// phiên là rẻ.
+const nameTextureCache = new Map(); // name -> { tex, aspect }
+function getNameTexture(name) {
+  let entry = nameTextureCache.get(name);
+  if (!entry) {
+    entry = makeNameTexture(name);
+    nameTextureCache.set(name, entry);
+  }
+  return entry;
+}
+function disposeNameTextureCache() {
+  nameTextureCache.forEach((entry) => entry.tex.dispose());
+  nameTextureCache.clear();
+}
+
 function NameSprites({ occupants, show }) {
   const sprites = useMemo(() => {
     if (!show) return [];
-    return occupants.map((o) => ({ ...o, tag: makeNameTexture(o.name) }));
+    return occupants.map((o) => ({ ...o, tag: getNameTexture(o.name) }));
   }, [occupants, show]);
-  // Dọn texture cũ khi danh sách tên đổi / unmount (tránh rò GPU).
-  useEffect(() => () => {
-    sprites.forEach((s) => s.tag.tex.dispose());
-  }, [sprites]);
+  // Chỉ dọn texture khi unmount hẳn (rời phòng): trong phiên, tên quay lại
+  // ghế khác vẫn dùng lại texture đã vẽ — không vẽ lại, không dispose.
+  useEffect(() => () => { disposeNameTextureCache(); }, []);
   if (!show) return null;
   return (
     <group>
@@ -438,11 +558,21 @@ function Arena({ room, seats, mySeat, guest, videoId, showLive, onEnded, onPlaye
     [seats, guest, hideMeSeat],
   );
 
+  // frameloop="demand": R3F không tự vẽ khi props đổi; các thứ làm đổi cảnh
+  // (bot đổi ghế → layout mới, đổi bài, bật/tắt tên/live) phải gọi invalidate
+  // để vẽ đúng 1 frame. Giữa các lần đổi thì không tốn frame nào. Riêng đi
+  // lại: AvatarWalk tự invalidate trong useFrame khi đang đi (nửa còn lại,
+  // làm ở AvatarWalk.jsx — không có nó thì đi lại chỉ nhích 1 bước).
+  const invalidate = useThree((s) => s.invalidate);
+  useEffect(() => { invalidate(); }, [layout, showLive, videoId, showNames, invalidate]);
+
   // 3 vòng khán đài: bán kính 9.5 / 12.5 / 15.5, càng ngoài càng cao.
+  // Lambert: sáng tính theo đỉnh (đủ cho vòng phẳng tối, 64 đoạn quanh vòng
+  // vẫn giữ được vệt đỏ/xanh 2 bên), fragment rẻ hơn Standard nhiều.
   const ringMeshes = RINGS.map(({ ring, r, y }) => (
     <mesh key={`tier-${ring}`} rotation={[-Math.PI / 2, 0, 0]} position={[0, y, 0]}>
       <ringGeometry args={[r - 1.3, r + 1.3, 64]} />
-      <meshStandardMaterial color="#14161c" roughness={0.9} />
+      <meshLambertMaterial color="#14161c" />
     </mesh>
   ));
 
@@ -457,25 +587,31 @@ function Arena({ room, seats, mySeat, guest, videoId, showLive, onEnded, onPlaye
       <pointLight position={[-8, 5, 0]} intensity={90} color="#ff2020" />
       <pointLight position={[8, 5, 0]} intensity={90} color="#00a8ff" />
 
-      {/* Sàn đấu trường + tường vòm tối */}
+      {/* Sàn đấu trường + tường vòm tối.
+          Sàn GIỮ Standard: CircleGeometry là quạt tam giác (1 đỉnh tâm +
+          vành) nên Lambert tính sáng theo đỉnh sẽ làm vệt đỏ/xanh của 2 đèn
+          bên loang sai; Basic thì mất hẳn vệt sáng. Tường trụ (48 đoạn) và
+          bục sân (48 đoạn) đổi Lambert — mặt tối, sáng theo đỉnh vẫn gần y
+          hệt. Trần tối #07080b đổi Basic phẳng — Standard cũng chỉ ra gần
+          như đen đặc. */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
         <circleGeometry args={[19, 64]} />
         <meshStandardMaterial color="#0d0f14" roughness={0.9} />
       </mesh>
       <mesh position={[0, 6, 0]}>
         <cylinderGeometry args={[19, 19, 12, 48, 1, true]} />
-        <meshStandardMaterial color="#0a0c10" roughness={1} side={THREE.BackSide} />
+        <meshLambertMaterial color="#0a0c10" side={THREE.BackSide} />
       </mesh>
       {/* Trần tối */}
       <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 12, 0]}>
         <circleGeometry args={[19, 48]} />
-        <meshStandardMaterial color="#07080b" roughness={1} />
+        <meshBasicMaterial color="#07080b" />
       </mesh>
 
       {/* Bục sân giữa: đĩa tròn nâng dưới màn hình */}
       <mesh position={[0, 0.25, 0]}>
         <cylinderGeometry args={[7.4, 7.8, 0.5, 48]} />
-        <meshStandardMaterial color="#1a1d24" roughness={0.7} />
+        <meshLambertMaterial color="#1a1d24" />
       </mesh>
       {/* Vòng neon quanh sàn giữa: nửa đỏ (T1) + nửa xanh (BLG) */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.52, 0]}>
@@ -536,6 +672,15 @@ function Arena({ room, seats, mySeat, guest, videoId, showLive, onEnded, onPlaye
         <meshBasicMaterial map={rightPanelTex} toneMapped={false} />
       </mesh>
 
+      {/* Banner fan — ảnh nhân vật cổ vũ ngồi, treo trên tường NGAY TRÊN panel
+          trận đấu: T1 phía đỏ (trái), BLG phía xanh (phải), cùng hướng mặt
+          vào giữa như panel (không xoay tiếp tuyến — bản đầu đặt tiếp tuyến
+          ở z≈+6.5 thì banner lọt ra mép khung hình ở góc toàn cảnh mặc định,
+          gần như không thấy; đặt trên panel thì nằm gọn trong khung như
+          panel, y 7.25..10.25 vẫn dưới trần 12). */}
+      <CheerBanner dataUri={T1_CHEER_IMG} position={[-17.5, 8.75, 0]} rotationY={Math.PI / 2} />
+      <CheerBanner dataUri={BLG_CHEER_IMG} position={[17.5, 8.75, 0]} rotationY={-Math.PI / 2} />
+
       {ringMeshes}
       <InstancedSeats layout={layout} />
       <InstancedOccupants occupants={layout.occupants} />
@@ -552,7 +697,7 @@ export default function Arena3D({ room, seats, mySeat, guest, cameraPreset, vide
   // ngược camera sát người ngồi nên tên phình to và chồng lên nhau (round 4).
   const showNames = cameraPreset === 'overview' || cameraPreset === 'screen';
   return (
-    <Canvas dpr={[1, 1.5]} camera={{ position: ARENA_CAMERA_PRESETS[cameraPreset].pos, fov: 55 }}>
+    <Canvas dpr={[1, 1.5]} frameloop="demand" camera={{ position: ARENA_CAMERA_PRESETS[cameraPreset].pos, fov: 55 }}>
       <color attach="background" args={['#05070a']} />
       <Rig preset={cameraPreset} reAim={reAim} />
       <AvatarWalk room={room} seats={seats} guest={guest} mySeat={mySeat}

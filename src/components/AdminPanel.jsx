@@ -21,6 +21,7 @@ import {
   containsBanned,
   maskBanned,
   listVoices,
+  pickVoice,
   speak,
   playBell,
   playMo,
@@ -136,6 +137,17 @@ export default function AdminPanel({ guest, onBack }) {
   const [music, setMusic] = useState({ track: config.musicTrack, playing: false, fileName: '', fileUrl: '' });
   const [channelDraft, setChannelDraft] = useState(config.channelName);
   const [boardDraft, setBoardDraft] = useState(config.boardTitle);
+  // Trạng thái phản hồi nhìn thấy được của 2 nút đọc thử
+  // (bug: bấm không thấy gì khi trình duyệt không có giọng đọc).
+  const [voiceTest, setVoiceTest] = useState({ tone: 'idle', text: '' });
+  const [commentTest, setCommentTest] = useState({ tone: 'idle', text: '' });
+  const testUtterRef = useRef(null); // utterance đọc thử đang chạy
+  const testTimerRef = useRef(null); // watchdog nếu trình duyệt nuốt lệnh đọc
+  const testTokenRef = useRef(0); // chống lần bấm cũ chạy sau lần bấm mới
+  const testActiveRef = useRef(false); // đang có bài đọc thử chạy (kể cả đang chờ 150ms sau cancel)
+  const testStartTimerRef = useRef(null); // timer chờ 150ms sau cancel() rồi mới đọc
+  const mountedRef = useRef(true); // còn mount không (dọn timer khi rời panel)
+  const voicesChangedRef = useRef(false); // trình duyệt đã báo voiceschanged hay chưa
 
   const liveRef = useRef(live);
   liveRef.current = live;
@@ -155,23 +167,159 @@ export default function AdminPanel({ guest, onBack }) {
     const load = () => setVoices(listVoices());
     load();
     try {
-      window.speechSynthesis?.addEventListener('voiceschanged', load);
-      return () => window.speechSynthesis?.removeEventListener('voiceschanged', load);
+      const onChange = () => { voicesChangedRef.current = true; load(); };
+      window.speechSynthesis?.addEventListener('voiceschanged', onChange);
+      return () => window.speechSynthesis?.removeEventListener('voiceschanged', onChange);
     } catch { return undefined; }
   }, []);
 
-  useEffect(() => () => { try { window.speechSynthesis?.cancel(); } catch { /* ignore */ } }, []);
+  useEffect(() => () => {
+    mountedRef.current = false;
+    testActiveRef.current = false;
+    if (testTimerRef.current) clearTimeout(testTimerRef.current);
+    if (testStartTimerRef.current) clearTimeout(testStartTimerRef.current);
+    testUtterRef.current = null;
+    try { window.speechSynthesis?.cancel(); } catch { /* ignore */ }
+  }, []);
 
   const log = useCallback((text) => {
     setRpcLog((prev) => [{ time: nowTime(), text }, ...prev].slice(0, 80));
   }, []);
 
+  // Hủy bài đọc thử đang chạy một cách sạch sẽ: vô hiệu hóa handler của
+  // utterance cũ (để nó không ghi kết quả giả), dọn timer, trả trạng thái
+  // 2 nút về idle. Dùng khi người dùng bấm đọc câu khác.
+  const abortTest = useCallback(() => {
+    testTokenRef.current += 1;
+    testUtterRef.current = null;
+    testActiveRef.current = false;
+    if (testTimerRef.current) { clearTimeout(testTimerRef.current); testTimerRef.current = null; }
+    if (testStartTimerRef.current) { clearTimeout(testStartTimerRef.current); testStartTimerRef.current = null; }
+    setVoiceTest({ tone: 'idle', text: '' });
+    setCommentTest({ tone: 'idle', text: '' });
+  }, []);
+
   const say = useCallback((text) => {
+    // Câu tự động (auto-reply / cảm ơn quà): đang đọc thử thì bỏ qua lượt
+    // này, không cancel() làm cắt ngang bài đọc thử.
+    if (testActiveRef.current) return false;
     const cfg = configRef.current;
     const ok = speak(text, { voiceURI: cfg.ttsVoiceURI, rate: cfg.ttsRate });
     lastSpokeRef.current = Date.now();
     return ok;
   }, []);
+
+  // Đọc do người dùng bấm (lời chủ quán / đọc lại comment): dừng bài đọc
+  // thử đang chạy một cách sạch sẽ rồi mới đọc câu mới.
+  const sayNow = useCallback((text) => {
+    abortTest();
+    const cfg = configRef.current;
+    const ok = speak(text, { voiceURI: cfg.ttsVoiceURI, rate: cfg.ttsRate });
+    lastSpokeRef.current = Date.now();
+    return ok;
+  }, [abortTest]);
+
+  // Đọc thử có phản hồi NHÌN THẤY được: đang đọc / đã xong (kèm tên giọng) /
+  // lỗi rõ ràng. Dùng đúng giọng + tốc độ đã chọn (ưu tiên giọng tiếng Việt).
+  // Bấm khi đang đọc thì dừng câu cũ rồi đọc câu mới, không chồng giọng.
+  // resetOther: reset trạng thái của nút đọc thử còn lại về idle ngay khi
+  // lượt mới bắt đầu — để nút cũ không kẹt "Đang đọc thử…" nếu lượt cũ
+  // chưa kịp tạo utterance (đổi nút trong 150ms chờ sau cancel).
+  const speakTest = useCallback((text, setStatus, label, resetOther) => {
+    const cfg = configRef.current;
+    const synth = window.speechSynthesis;
+    // Tốc độ tính 1 lần, clamp [0.5, 2] — dùng chung cho u.rate và chuỗi
+    // trạng thái (tránh toFixed() ném lỗi khi config lưu hỏng).
+    const rate = Math.min(2, Math.max(0.5, Number(cfg.ttsRate) || 1.2));
+    const myToken = ++testTokenRef.current;
+    resetOther?.();
+    testActiveRef.current = true;
+    if (testTimerRef.current) { clearTimeout(testTimerRef.current); testTimerRef.current = null; }
+    if (testStartTimerRef.current) { clearTimeout(testStartTimerRef.current); testStartTimerRef.current = null; }
+    const wasSpeaking = !!(synth && (synth.speaking || synth.pending));
+    if (wasSpeaking) {
+      try { synth.cancel(); } catch { /* ignore */ }
+      // Vô hiệu hóa handler của utterance cũ NGAY: Chrome phát onerror
+      // 'canceled' bất đồng bộ, lúc đó utter ref vẫn trỏ utterance cũ nên
+      // guard cũ không chặn được → nút cũ hiện kết quả giả + log rác.
+      testUtterRef.current = null;
+    }
+    const fail = (msg) => {
+      testActiveRef.current = false;
+      setStatus({ tone: 'error', text: msg });
+      log(`Đọc thử (${label}): lỗi — ${msg}`);
+    };
+    if (!synth) {
+      fail('Trình duyệt không hỗ trợ đọc giọng (speechSynthesis).');
+      return;
+    }
+    const vs = listVoices();
+    if (!vs.length) {
+      fail(voicesChangedRef.current
+        ? 'Trình duyệt này không có giọng đọc nào — cần cài thêm giọng đọc cho hệ điều hành hoặc trình duyệt.'
+        : 'Trình duyệt chưa nạp xong danh sách giọng, thử lại sau vài giây.');
+      return;
+    }
+    const v = pickVoice(vs, cfg.ttsVoiceURI); // không null khi vs không rỗng (vi → en → voices[0])
+    setStatus({ tone: 'speaking', text: 'Đang đọc thử…' });
+    // Kết thúc 1 lượt đọc thử (xong / lỗi / watchdog): dọn hết ref + timer.
+    const finish = (tone, msg, logMsg) => {
+      testActiveRef.current = false;
+      testUtterRef.current = null;
+      if (testTimerRef.current) { clearTimeout(testTimerRef.current); testTimerRef.current = null; }
+      setStatus({ tone, text: msg });
+      log(logMsg);
+    };
+    const start = () => {
+      testStartTimerRef.current = null;
+      if (!mountedRef.current) { testActiveRef.current = false; return; }
+      if (testTokenRef.current !== myToken) return; // đã có lần bấm mới hơn
+      try {
+        const u = new SpeechSynthesisUtterance(text);
+        u.voice = v;
+        u.lang = v.lang || 'vi-VN';
+        u.rate = rate;
+        testUtterRef.current = u;
+        // Guard bằng token: handler của utterance đã bị hủy (do lần bấm
+        // mới hơn hoặc do sayNow) phải im lặng, không ghi kết quả giả.
+        u.onend = () => {
+          if (testTokenRef.current !== myToken || testUtterRef.current !== u) return;
+          const done = `Đã đọc xong ✓ (giọng: ${v.name} · ${rate.toFixed(2)}×)`;
+          finish('done', done, `Đọc thử (${label}): đã đọc xong (giọng: ${v.name})`);
+        };
+        u.onerror = (e) => {
+          if (testTokenRef.current !== myToken || testUtterRef.current !== u) return;
+          const msg = `Lỗi đọc giọng (${e?.error || 'không rõ nguyên nhân'}) — thử đổi giọng hoặc tải lại trang.`;
+          finish('error', msg, `Đọc thử (${label}): lỗi — ${msg}`);
+        };
+        synth.speak(u);
+        // Đề phòng trình duyệt nuốt lệnh đọc mà không báo onend/onerror.
+        // Timeout theo độ dài câu + tốc độ; nếu vẫn đang đọc thật thì hẹn
+        // lại thêm 10s thay vì báo lỗi giả.
+        const estMs = Math.max(20000, Math.ceil((text.length * 350) / rate) + 5000);
+        const armWatchdog = (ms) => {
+          testTimerRef.current = setTimeout(() => {
+            testTimerRef.current = null;
+            if (testTokenRef.current !== myToken || testUtterRef.current !== u) return;
+            if (synth.speaking) { armWatchdog(10000); return; }
+            const msg = 'Không nhận được phản hồi từ trình duyệt (giọng đọc có thể bị kẹt) — thử bấm lại.';
+            finish('error', msg, `Đọc thử (${label}): lỗi — ${msg}`);
+          }, ms);
+        };
+        armWatchdog(estMs);
+      } catch {
+        testActiveRef.current = false;
+        testUtterRef.current = null;
+        const msg = 'Không tạo được lệnh đọc giọng trên trình duyệt này.';
+        setStatus({ tone: 'error', text: msg });
+        log(`Đọc thử (${label}): lỗi — ${msg}`);
+      }
+    };
+    // Chrome có lỗi đã biết: cancel() rồi speak() ngay có thể làm câu mới
+    // bị nuốt — chờ 150ms sau cancel rồi mới đọc.
+    if (wasSpeaking) testStartTimerRef.current = setTimeout(start, 150);
+    else start();
+  }, [log]);
 
   const addTop = useCallback((name, points) => {
     setTop((prev) => ({ ...prev, [name]: (prev[name] || 0) + points }));
@@ -343,8 +491,7 @@ export default function AdminPanel({ guest, onBack }) {
     const sample = 'Chào chủ quán, con mong tuần sau thi được điểm cao ạ';
     const topic = detectWish(sample);
     const line = topic ? replyLine(topic, 'Khách Vỉa Hè', config.channelName, config.ttsTemplate) : 'Chúc bạn một ngày bình an ạ.';
-    say(line);
-    log(`Đọc thử comment: "${sample}" → đáp lời chúc (không đọc nguyên văn)`);
+    speakTest(line, setCommentTest, 'comment', () => setVoiceTest({ tone: 'idle', text: '' }));
   };
 
   const onPickFile = (e) => {
@@ -463,7 +610,7 @@ export default function AdminPanel({ guest, onBack }) {
             <label>Đọc lời chủ quán (phát trên live)</label>
             <div className="admin-row">
               <input value={ownerLine} onChange={(e) => setOwnerLine(e.target.value)} placeholder="Câu chủ quán muốn đọc…" />
-              <button className="admin-btn gold" onClick={() => { say(ownerLine); log(`Đọc lời chủ quán: "${ownerLine}"`); }}>🔊 Đọc Lời Chủ Quán</button>
+              <button className="admin-btn gold" onClick={() => { sayNow(ownerLine); log(`Đọc lời chủ quán: "${ownerLine}"`); }}>🔊 Đọc Lời Chủ Quán</button>
             </div>
             <p className="admin-hint">Giọng đọc phát ngay trên trình duyệt này. Màn hình quán không phát tiếng — muốn lên live/OBS thì mở web này làm nguồn trình duyệt.</p>
           </div>
@@ -485,7 +632,10 @@ export default function AdminPanel({ guest, onBack }) {
               onChange={(e) => setConfig((c) => ({ ...c, ttsRate: parseFloat(e.target.value) }))} />
             <div className="admin-range-labels"><span>Chậm · 0.5×</span><span>Nhanh · 2×</span></div>
           </div>
-          <button className="admin-btn gold" onClick={() => say('Trà đá một lần đây! Mời bạn ghé quán nhé.')}>▶ Đọc thử</button>
+          <button className="admin-btn gold" onClick={() => speakTest('Trà đá một lần đây! Mời bạn ghé quán nhé.', setVoiceTest, 'giọng đọc', () => setCommentTest({ tone: 'idle', text: '' }))}>▶ Đọc thử</button>
+          {voiceTest.text && (
+            <p className="admin-hint" style={voiceTest.tone === 'error' ? { color: '#ffb3b3' } : voiceTest.tone === 'done' ? { color: '#8fd6a0' } : undefined}>{voiceTest.text}</p>
+          )}
         </section>
 
         {/* Góc quay từng phòng — web client chỉ xem, chỉ admin chỉnh ở đây */}
@@ -630,6 +780,9 @@ export default function AdminPanel({ guest, onBack }) {
             <button className="admin-btn gold" onClick={testComment}>🔊 Đọc Thử Comment</button>
             <button className="admin-btn ghost" onClick={() => { setComments([]); log('Đã xóa danh sách bình luận gần nhất'); }}>🗑 Xóa danh sách</button>
           </div>
+          {commentTest.text && (
+            <p className="admin-hint" style={commentTest.tone === 'error' ? { color: '#ffb3b3' } : commentTest.tone === 'done' ? { color: '#8fd6a0' } : undefined}>{commentTest.text}</p>
+          )}
           <div className="admin-field">
             <label>Bình Luận Gần Nhất (Click nút Loa để đọc lại trên Live)</label>
             {comments.length === 0
@@ -640,7 +793,7 @@ export default function AdminPanel({ guest, onBack }) {
                   <div>{c.text}</div>
                   <button className="admin-btn ghost" style={{ marginTop: 6 }} onClick={() => {
                     const topic = detectWish(c.text);
-                    say(topic ? replyLine(topic, c.name, config.channelName, config.ttsTemplate) : `Cảm ơn ${c.name} đã ghé live ạ.`);
+                    sayNow(topic ? replyLine(topic, c.name, config.channelName, config.ttsTemplate) : `Cảm ơn ${c.name} đã ghé live ạ.`);
                   }}>🔊 Đọc lại</button>
                 </div>
               ))}
