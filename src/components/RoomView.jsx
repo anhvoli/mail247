@@ -4,6 +4,7 @@ import Arena3D, { ARENA_CAMERA_PRESETS } from './Arena3D';
 import Karaoke3D, { KARAOKE_CAMERA_PRESETS } from './Karaoke3D';
 import ErrorBoundary from './ErrorBoundary';
 import SeatMap from './SeatMap';
+import YouTubePlayer from '../youtube';
 import { EMOJI_GROUPS, GESTURES, MISSIONS } from '../data';
 import { KARAOKE_RULES } from '../karaoke-room-spec';
 import { getCameraPreset, subscribeCameraPreset } from '../adminCamera';
@@ -166,6 +167,12 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
   const [camera, setCamera] = useState(() => getCameraPreset(room.id));
   const [controlsOn, setControlsOn] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  // Chế độ phóng to dự phòng bằng CSS (vòng 2): requestFullscreen có thể bị
+  // trình duyệt từ chối (môi trường nhúng / không có quyền) — lần kiểm
+  // chứng live 17:12 bấm nút 2 lần không có tác dụng gì vì lỗi bị nuốt
+  // lặng (.catch(() => {})). Khi API thất bại thì bật class này để khung
+  // vẫn lấp màn hình, thoát bằng nút hoặc Esc như fullscreen thật.
+  const [fsFallback, setFsFallback] = useState(false);
   // Số lần ngắm lại camera (fix 07/11 ~00:30): AvatarWalk chỉnh camera trực
   // tiếp nên Rig chỉ ngắm lại khi preset đổi — bấm lại góc đang chọn là
   // state no-op, ngồi xuống ghế sau khi đi lại cũng vậy, camera kẹt ở vị
@@ -374,30 +381,53 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
     setTimeout(() => setToast(''), 5000);
   }, [voteSkip, skipThreshold]);
 
-  // Escape thoát toàn màn hình (kể cả khi đang ở góc "Tập trung màn hình").
+  // Escape thoát toàn màn hình (kể cả khi đang ở góc "Tập trung màn hình")
+  // và thoát cả chế độ phóng to dự phòng bằng CSS (vòng 2).
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key === 'Escape' && document.fullscreenElement) {
-        document.exitFullscreen().catch(() => { /* ignore */ });
+      if (e.key === 'Escape') {
+        if (document.fullscreenElement) {
+          document.exitFullscreen().catch(() => { /* ignore */ });
+        } else if (fsFallback) {
+          setFsFallback(false);
+        }
       }
     };
-    const onFsChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    const onFsChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+      // Vào được fullscreen thật thì tắt chế độ dự phòng (không chồng nhau).
+      if (document.fullscreenElement) setFsFallback(false);
+    };
     document.addEventListener('keydown', onKey);
     document.addEventListener('fullscreenchange', onFsChange);
     return () => {
       document.removeEventListener('keydown', onKey);
       document.removeEventListener('fullscreenchange', onFsChange);
     };
-  }, []);
+  }, [fsFallback]);
 
-  const toggleFullscreen = () => {
+  const toggleFullscreen = async () => {
     if (document.fullscreenElement) {
-      document.exitFullscreen().catch(() => { /* ignore */ });
+      try { await document.exitFullscreen(); } catch { /* ignore */ }
       return;
     }
-    if (stageRef.current && stageRef.current.requestFullscreen) {
-      stageRef.current.requestFullscreen().catch(() => { /* ignore */ });
+    if (fsFallback) { setFsFallback(false); return; }
+    const el = stageRef.current;
+    if (el && el.requestFullscreen) {
+      try {
+        await el.requestFullscreen();
+        return; // thành công: fullscreenchange cập nhật isFullscreen
+      } catch (err) {
+        // Vòng 2: trước đây lỗi bị nuốt lặng nên bấm nút mà khung không đổi
+        // và người xem không biết vì sao — nay ghi log + báo rõ + dùng
+        // chế độ phóng to bằng CSS thay thế.
+        console.warn('[fullscreen] requestFullscreen bị từ chối, dùng chế độ phóng to CSS:', err);
+        showToast('Trình duyệt chặn toàn màn hình — đã mở chế độ phóng to thay thế (Esc để thoát).');
+      }
+    } else {
+      showToast('Trình duyệt không hỗ trợ toàn màn hình — đã mở chế độ phóng to thay thế (Esc để thoát).');
     }
+    setFsFallback(true);
   };
 
   const sendChat = () => {
@@ -446,7 +476,7 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
       </div>
 
       <div className="main">
-        <div className={`stage ${camera === 'screen' ? 'focus-screen' : ''}`} ref={stageRef}>
+        <div className={`stage ${camera === 'screen' ? 'focus-screen' : ''} ${fsFallback ? 'fs-fallback' : ''}`} ref={stageRef}>
           <div className="view3d">
             {/* Cảnh 3D đã memo (biến `scene` ở trên): RoomView render lại vì
                 gõ chat / đổi tab / vote / toast cũng không render lại Canvas.
@@ -466,6 +496,21 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
             <span className="cam-label">{PRESETS[camera].label}</span>
             <span className="wasd-hint">{isKaraoke ? 'Bấm vào ghế để ngồi · Chấm điểm ca sĩ sau mỗi tiết mục' : 'W A S D để đi lại · Space để nhảy · E hoặc bấm vào ghế để ngồi'}</span>
           </div>
+          {/* Trình phát nền (vòng 2): player trên màn hình 3D chỉ mount ở góc
+              overview/screen — ở góc ghế/ngược thì video dừng hẳn, đồng hồ
+              đóng băng (kiểm chứng live 17:12: vào arena là 0:00 từ đầu vì
+              góc ghế; vòng 1 chỉ giữ giờ cũ chứ không phát tiếp). Engine này
+              phát tiếp (tắt tiếng, ẩn ngoài màn hình) để đồng hồ chạy + tự
+              chuyển bài ở mọi góc; quay lại góc overview thì player màn
+              hình mount lại từ đúng giây đã xem. Chỉ 1 player tồn tại tại
+              1 thời điểm (engine chỉ mount khi !showLive). */}
+          {!showLive && (
+            <div className="bg-engine" aria-hidden="true">
+              <YouTubePlayer videoId={current.id} onEnded={handleEnded} onPlayerReady={handlePlayerReady}
+                controls={controlsOn} startSeconds={playheadRef.current.vid === current.id ? Math.floor(playheadRef.current.cur) : 0}
+                background />
+            </div>
+          )}
           <div className="controls">
             <span><b>Đang chiếu:</b> {current.title} · {current.by}</span>
             <span className="cam-btns">
@@ -473,7 +518,7 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
                 {controlsOn ? 'Ẩn điều khiển trình phát' : 'Hiện điều khiển trình phát'}
               </button>
               <button className="player-controls-btn" onClick={toggleFullscreen} title="Toàn màn hình (Esc để thoát)">
-                {isFullscreen ? 'Thoát toàn màn hình (Esc)' : '⛶ Toàn màn hình'}
+                {isFullscreen || fsFallback ? 'Thoát toàn màn hình (Esc)' : '⛶ Toàn màn hình'}
               </button>
             </span>
           </div>

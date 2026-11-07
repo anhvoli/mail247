@@ -360,3 +360,18 @@ html, body { overflow-x: clip; }
 .stage:-webkit-full-screen .gesture-row,
 .stage:-webkit-full-screen .toast,
 .stage:-webkit-full-screen .seatmap { display: none; }
+
+/* Chế độ phóng to dự phòng bằng CSS (vòng 2, bug 2): khi requestFullscreen
+   bị trình duyệt từ chối/không khả dụng (môi trường nhúng — kiểm chứng live
+   17:12 bấm nút không có tác dụng gì) thì .stage vẫn lấp màn hình bằng
+   position:fixed; thoát bằng nút hoặc Esc như fullscreen thật. */
+.stage.fs-fallback { position: fixed; inset: 0; z-index: 9999; width: 100vw; height: 100vh; height: 100dvh; border: 0; border-radius: 0; background: #000; overflow-y: auto; }
+.stage.fs-fallback .view3d { flex: 1 1 auto; height: auto; min-height: 0; border-bottom: 0; }
+.stage.fs-fallback .gesture-row,
+.stage.fs-fallback .toast,
+.stage.fs-fallback .seatmap { display: none; }
+
+/* Trình phát nền giữ video chạy ở góc ghế/ngược (vòng 2, bug 1): iframe thật
+   320×180 nhưng đẩy ra ngoài màn hình để không ai thấy/không bấm nhầm;
+   KHÔNG dùng display:none (một số trình duyệt tạm dừng video bị ẩn hẳn). */
+.bg-engine { position: fixed; left: -10000px; top: 0; width: 320px; height: 180px; overflow: hidden; pointer-events: none; }

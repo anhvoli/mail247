@@ -65,7 +65,14 @@ function loadYouTubeApi() {
 
 const IFRAME_ALLOW = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
 
-export default function YouTubePlayer({ videoId, onEnded, onPlayerReady, controls = true, startSeconds = 0, onMutedChange }) {
+// Trạng thái tiếng dùng chung cho mọi lần tạo lại player (vòng 2): trước
+// đây mutedRef khởi tạo true trong mỗi instance nên đổi góc camera (player
+// remount) là tiếng tắt lại dù người xem đã bấm bật tiếng. Nay giữ ở cấp
+// module để player mount lại vẫn nhớ đã bật tiếng hay chưa. Engine nền
+// (background) luôn tắt tiếng và không đụng tới trạng thái này.
+let sharedMuted = true;
+
+export default function YouTubePlayer({ videoId, onEnded, onPlayerReady, controls = true, startSeconds = 0, onMutedChange, background = false }) {
   // Container do React sở hữu, JSX không render con nào bên trong — mọi node
   // con (mount div / iframe) đều tạo bằng tay, YT thay thế chúng cũng không
   // làm lệch cây DOM của React.
@@ -91,8 +98,11 @@ export default function YouTubePlayer({ videoId, onEnded, onPlayerReady, control
   useEffect(() => { onMutedChangeRef.current = onMutedChange; }, [onMutedChange]);
   // Bắt đầu TẮT TIẾNG (round 4): autoplay có tiếng bị chặn nên video kẹt ở
   // 0:00 tới khi người dùng tương tác. mutedRef giữ trạng thái qua các lần
-  // tạo lại player (đổi controls / đổi góc camera).
-  const mutedRef = useRef(true);
+  // tạo lại player (đổi controls / đổi góc camera) — đọc từ sharedMuted
+  // (vòng 2) để đổi góc không làm tiếng tắt lại; engine nền (background)
+  // luôn tắt tiếng vì người xem không thấy video (bật tiếng là tiếng phát
+  // ra từ chỗ không có hình).
+  const mutedRef = useRef(background ? true : sharedMuted);
   // Chống vòng lặp tự bỏ qua làm giao diện NHẢY (fix 07/11 ~00:10):
   // khi YouTube chặn/không phát được, onError bắn liên tục — mỗi lần bỏ qua
   // là advanceToNext đổi bài + tạo lại player, mà guard cũ "3 lỗi trong 15s"
@@ -162,29 +172,36 @@ export default function YouTubePlayer({ videoId, onEnded, onPlayerReady, control
     // đầu tiên trong phòng (autoplay có tiếng bị chặn nên phải bắt đầu
     // muted — xem mutedRef). Nút tạo bằng tay như mountEl để YT thay node
     // cũng không lệch DOM của React; cleanup ở dưới gỡ nó cùng container.
-    const muteBtn = document.createElement('button');
-    muteBtn.type = 'button';
-    muteBtn.textContent = '🔇 Đang tắt tiếng — bấm để bật tiếng';
-    muteBtn.style.cssText = 'position:absolute;top:8px;right:8px;z-index:5;background:rgba(0,0,0,.68);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:999px;padding:6px 12px;font-size:13px;cursor:pointer;';
+    // Engine nền (background, vòng 2) KHÔNG có nút này và không bật tiếng
+    // ở lần chạm đầu tiên — video ẩn ngoài màn hình thì không được phát
+    // tiếng; tiếng chỉ bật khi player màn hình đang hiện.
+    let muteBtn = null;
     const doUnmute = () => {
-      if (!mutedRef.current) return;
+      if (background || !mutedRef.current) return;
       mutedRef.current = false;
+      sharedMuted = false;
       try {
         const p = playerRef.current;
         if (p && p.unMute) { p.unMute(); if (p.setVolume) p.setVolume(100); }
       } catch { /* player chưa sẵn — onReady sẽ áp trạng thái mới */ }
-      if (muteBtn.isConnected) muteBtn.style.display = 'none';
+      if (muteBtn && muteBtn.isConnected) muteBtn.style.display = 'none';
       if (onMutedChangeRef.current) onMutedChangeRef.current(false);
     };
-    muteBtn.addEventListener('click', (e) => { e.stopPropagation(); doUnmute(); });
-    container.appendChild(muteBtn);
-    const syncMuteBtn = () => { if (muteBtn.isConnected) muteBtn.style.display = mutedRef.current ? 'block' : 'none'; };
-    syncMuteBtn();
-    // Lần tương tác đầu tiên ở bất cứ đâu trong phòng thì bật tiếng (sau
-    // khi người dùng đã chạm/phím thì trình duyệt cho phát có tiếng).
     const onFirstGesture = () => { doUnmute(); };
-    window.addEventListener('pointerdown', onFirstGesture);
-    window.addEventListener('keydown', onFirstGesture);
+    if (!background) {
+      muteBtn = document.createElement('button');
+      muteBtn.type = 'button';
+      muteBtn.textContent = '🔇 Đang tắt tiếng — bấm để bật tiếng';
+      muteBtn.style.cssText = 'position:absolute;top:8px;right:8px;z-index:5;background:rgba(0,0,0,.68);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:999px;padding:6px 12px;font-size:13px;cursor:pointer;';
+      muteBtn.addEventListener('click', (e) => { e.stopPropagation(); doUnmute(); });
+      container.appendChild(muteBtn);
+      const syncMuteBtn = () => { if (muteBtn.isConnected) muteBtn.style.display = mutedRef.current ? 'block' : 'none'; };
+      syncMuteBtn();
+      // Lần tương tác đầu tiên ở bất cứ đâu trong phòng thì bật tiếng (sau
+      // khi người dùng đã chạm/phím thì trình duyệt cho phát có tiếng).
+      window.addEventListener('pointerdown', onFirstGesture);
+      window.addEventListener('keydown', onFirstGesture);
+    }
 
     const handleReady = (target) => {
       playerRef.current = target;
@@ -240,6 +257,13 @@ export default function YouTubePlayer({ videoId, onEnded, onPlayerReady, control
       iframe.style.display = 'block';
       container.appendChild(iframe);
       fallbackIframeRef.current = iframe;
+      // Vòng 2: container.innerHTML = '' ở trên đã gỡ luôn nút tắt tiếng
+      // (tạo trước đó) — gắn lại để ở chế độ dự phòng người xem vẫn bật
+      // được tiếng; engine nền không có nút này (muteBtn null) nên không sao.
+      if (muteBtn) {
+        container.appendChild(muteBtn);
+        muteBtn.style.display = mutedRef.current ? 'block' : 'none';
+      }
       // Chống tích tụ thẻ <script> khi YouTube bị chặn: mỗi lần
       // loadYouTubeApi() reject là 1 chu kỳ nạp đã thử đủ 3 lượt trong nội
       // bộ (mỗi lượt append 1 thẻ <script> iframe_api vào <head>). Interval
