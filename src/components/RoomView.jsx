@@ -34,6 +34,13 @@ function parseDuration(str) {
   return m ? (+m[1]) * 60 + (+m[2]) : 0;
 }
 
+// Vị trí phát gần nhất của từng phòng (giờ + thời lượng + id bài, key =
+// room.id) — SỐNG Ở CẤP MODULE để còn qua lần RoomView unmount khi rời
+// phòng (ref trong component mất theo unmount). Poll player mỗi giây ghi
+// vào đây; vào lại phòng thì khối reset playhead + effect đồng hồ của
+// panel đọc lại từ đây để hiện đúng giờ đang chạy thay vì 0:00/0:00.
+const playheadCache = {};
+
 // Panel "TRÊN MÀN ẢNH" như bản gốc (đè lên góc trái khung 3D): tên bài, người
 // đề xuất, thời gian hiện tại / tổng thời lượng, thanh tiến trình, vote bỏ qua
 // theo đúng định dạng gốc "Vote bỏ qua X/Y" và "X/N người thật đồng ý · P% ·
@@ -52,8 +59,14 @@ const NowPlayingPanel = memo(function NowPlayingPanel({ current, queue, playhead
   // lúc còn trả giờ/thời lượng của bài CŨ, nhận bừa là panel hiện sai thời
   // lượng (từng hiện 5:26 của bài Sơn Tùng cho video đấu trường).
   const [time, setTime] = useState(() => ({ ...playheadRef.current }));
-  // Đổi bài thì đồng hồ về 0 ngay (không lấy giờ bài cũ).
-  useEffect(() => { setTime({ cur: 0, dur: parseDuration(current.duration), vid: current.id }); }, [current.id, current.duration]);
+  // Đổi bài thì đồng hồ về 0 ngay (không lấy giờ bài cũ) — NHƯNG vào lại
+  // phòng thì đồng bộ từ playheadRef (đã có giờ thật nhờ cache theo phòng,
+  // xem playheadCache) thay vì 0:00/0:00. Interval bên dưới vẫn cập nhật
+  // mỗi giây khi player đang chạy.
+  useEffect(() => {
+    const p = playheadRef.current;
+    setTime(p && p.vid === current.id ? { ...p } : { cur: 0, dur: parseDuration(current.duration), vid: current.id });
+  }, [current.id, current.duration]);
   useEffect(() => {
     const t = setInterval(() => {
       const p = playheadRef.current;
@@ -174,23 +187,58 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
       setCameraNonce((n) => n + 1);
     });
   }, [room.id]);
+  // Vị trí phát gần nhất của từng phòng (giờ + thời lượng + id bài, key =
+  // room.id): RoomView unmount mỗi lần rời phòng nên playheadRef mất theo —
+  // vào lại thì đồng hồ về 0:00/0:00 và video phát lại từ đầu. Cache này
+  // giữ lại để vào lại thì panel hiện đúng giờ đang chạy + phát tiếp từ
+  // giây đã xem. Chỉ áp khi đúng bài (vid khớp) và đã chạy thật (cur > 0);
+  // đổi bài thì về 0 như thường. (Khai báo ở ngoài component — ref trong
+  // component cũng mất theo unmount nên không giữ được qua lần vào lại.)
   // Thời gian phát hiện tại CHỈ ghi vào ref (poll player mỗi giây): trước đây
   // setPlayhead mỗi giây làm RoomView render lại toàn bộ — kể cả Canvas R3F
   // và toàn bộ cảnh 3D — nên phòng bị giật mỗi giây. Giờ interval chỉ ghi
   // ref; panel "TRÊN MÀN ẢNH" tự đọc ref bằng interval riêng của nó, còn
   // startSeconds (phát tiếp từ giây đã xem khi player remount vì đổi góc)
   // đọc ref lúc render lại vì đổi góc/đổi bài.
-  const playheadRef = useRef({ cur: 0, dur: 0, vid: null });
+  const playheadRef = useRef(null);
+  if (playheadRef.current === null) {
+    // Khởi tạo từ cache ngay lúc mount: khi vào lại Rạp phim, current đã
+    // là đúng bài phim từ lúc ở sảnh (useRoom chạy với 'phim' khi ở sảnh)
+    // nên khối reset khi đổi bài bên dưới KHÔNG chạy — không có bước này
+    // thì playheadRef ở {cur:0, vid:null}, panel hiện 0:00 và player phát
+    // lại từ đầu. (Vào lại arena thì current lúc mount còn là bài phim cũ,
+    // khối reset bên dưới vẫn là đường lấy cache.)
+    const cached0 = playheadCache[room.id];
+    playheadRef.current = (cached0 && cached0.vid === current.id && cached0.cur > 0)
+      ? { ...cached0 }
+      : { cur: 0, dur: parseDuration(current.duration), vid: current.id };
+  }
   // Đổi bài thì playhead về 0 ngay trong lúc render (không đợi effect) để
-  // startSeconds của bài mới không lấy nhầm giờ bài cũ.
+  // startSeconds của bài mới không lấy nhầm giờ bài cũ. Vào lại phòng thì
+  // lấy lại giờ đã xem từ cache (đúng bài + đã chạy thật) thay vì về 0.
   const playheadVideoId = useRef(current.id);
   if (playheadVideoId.current !== current.id) {
     playheadVideoId.current = current.id;
-    playheadRef.current = { cur: 0, dur: parseDuration(current.duration), vid: current.id };
+    const cached = playheadCache[room.id];
+    playheadRef.current = (cached && cached.vid === current.id && cached.cur > 0)
+      ? { ...cached }
+      : { cur: 0, dur: parseDuration(current.duration), vid: current.id };
   }
   const stageRef = useRef(null);
   const playerRef = useRef(null);
   const gestureRowRef = useRef(null);
+
+  // Player chỉ mount khi ở góc xem được màn hình (overview/screen); ở góc
+  // ghế/ngược thì video không mount nhưng đồng hồ panel vẫn phải giữ giờ
+  // cũ nhờ playheadRef + cache (không về 0:00/0:00).
+  const showLive = camera === 'overview' || camera === 'screen';
+  const prevShowLiveRef = useRef(showLive);
+  useEffect(() => {
+    // Player bị hủy khi rời khỏi góc xem được màn hình — xóa ref để poll
+    // không gọi method trên player đã chết.
+    if (prevShowLiveRef.current && !showLive) playerRef.current = null;
+    prevShowLiveRef.current = showLive;
+  }, [showLive]);
 
   // --- Chấm điểm Karaoke (chỉ dùng khi room.kind === 'karaoke') ---
   // Ca sĩ đang hát = người đề xuất bài đang chiếu; điểm trung bình hiện trên
@@ -209,6 +257,8 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
 
   const currentIdRef = useRef(current.id);
   useEffect(() => { currentIdRef.current = current.id; }, [current.id]);
+  const roomIdRef = useRef(room.id);
+  roomIdRef.current = room.id;
   useEffect(() => {
     const t = setInterval(() => {
       const p = playerRef.current;
@@ -225,10 +275,22 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
           const vd = p.getVideoData && p.getVideoData();
           if (vd && vd.video_id) vid = vd.video_id;
         } catch { /* API cũ không có getVideoData */ }
-        if (dur > 0 && cur > 0 && vid === currentIdRef.current) playheadRef.current = { cur, dur, vid };
+        if (dur > 0 && cur > 0 && vid === currentIdRef.current) {
+          playheadRef.current = { cur, dur, vid };
+          // Giữ lại vào cache theo phòng để vào lại thì panel hiện đúng
+          // giờ đang chạy + phát tiếp từ giây đã xem (xem playheadCache).
+          playheadCache[roomIdRef.current] = { cur, dur, vid };
+        }
       } catch { /* player chưa sẵn / đã hủy */ }
     }, 1000);
     return () => clearInterval(t);
+  }, []);
+  // Rời phòng: lưu nốt vị trí lần cuối (poll mỗi 1s có thể chưa kịp ghi
+  // nếu rời ngay sau khi vào). Chỉ lưu khi đã chạy thật (cur > 0) để
+  // không đè mất giờ của bài trước đó bằng 0.
+  useEffect(() => () => {
+    const p = playheadRef.current;
+    if (p && p.vid && p.cur > 0) playheadCache[roomIdRef.current] = { ...p };
   }, []);
 
   // Callback ổn định cho cảnh 3D: dùng ref "latest" để memo của cảnh không
@@ -251,7 +313,7 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
     const common = {
       room, seats, mySeat, guest,
       cameraPreset: camera, videoId: current.id,
-      showLive: camera === 'overview' || camera === 'screen',
+      showLive,
       onEnded: handleEnded, onPlayerReady: handlePlayerReady,
       controls: controlsOn, startSeconds: playheadRef.current.vid === current.id ? Math.floor(playheadRef.current.cur) : 0,
       onPickSeat: handlePickSeat, reAim: cameraNonce,

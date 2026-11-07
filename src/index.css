@@ -341,3 +341,22 @@ html, body { overflow-x: clip; }
 .hours-note { background: #2a2113; border: 1px solid #6b5518; color: #ffd75e; border-radius: 10px; padding: 8px 12px; font-size: 13px; margin-bottom: 12px; }
 /* Ghế Karaoke đỏ (sơ đồ 2D) — ghế trống đỏ đậm, ghế có người giữ màu chung. */
 .seat.karaoke-seat { border-color: #7a2a2a; background: #3a1414; }
+
+/* Toàn màn hình (bug 2, 2026-11-07): nút fullscreen request lên .stage nhưng
+   .view3d cao cố định 300px nên khung 3D vẫn nhỏ, dưới còn khoảng đen lớn
+   (sơ đồ ghế + các hàng dưới khung). Ở chế độ fullscreen: .stage lấp đầy
+   màn hình, .view3d chiếm hết chiều cao còn lại, ẩn sơ đồ ghế / hàng điệu
+   bộ / toast; thanh điều khiển giữ lại ở dưới để còn nút "Thoát toàn màn
+   hình" (Esc cũng thoát được). R3F tự vẽ lại 1 frame khi container đổi
+   kích thước (store subscribe → invalidate) nên không cần chạm JS.
+   Đặt cuối file để thắng cả rule height trong media query mobile. */
+.stage:fullscreen { width: 100vw; height: 100vh; height: 100dvh; border: 0; border-radius: 0; background: #000; }
+.stage:fullscreen .view3d { flex: 1 1 auto; height: auto; min-height: 0; border-bottom: 0; }
+.stage:fullscreen .gesture-row,
+.stage:fullscreen .toast,
+.stage:fullscreen .seatmap { display: none; }
+.stage:-webkit-full-screen { width: 100vw; height: 100vh; height: 100dvh; border: 0; border-radius: 0; background: #000; }
+.stage:-webkit-full-screen .view3d { flex: 1 1 auto; height: auto; min-height: 0; border-bottom: 0; }
+.stage:-webkit-full-screen .gesture-row,
+.stage:-webkit-full-screen .toast,
+.stage:-webkit-full-screen .seatmap { display: none; }

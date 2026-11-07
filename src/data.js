@@ -139,16 +139,18 @@ export const ROOMS = {
     // Video mở màn ĐÃ KIỂM CHỨNG qua oEmbed YouTube:
     //  - rZHrffKAc6k: "T1 vs BLG Highlights | T1 vs Bilibili Gaming | Grand Finals | Worlds 2024"
     //    (kênh LoL Esports) — trận chung kết CKTG 2024 T1 thắng BLG 3-2, xem lại trước bán kết.
-    //    Thời lượng không lấy được từ oEmbed/trang watch nên để '?'; trình phát
-    //    báo giờ thật khi chạy (panel "TRÊN MÀN ẢNH" dùng giờ của player).
+    //    Thời lượng 22:54 đã kiểm chứng trên ảnh live 2026-11-07 (panel hiện
+    //    0:06/22:54 khi chạy thật); panel vẫn dùng getDuration() thật từ
+    //    player khi có, nhưng có duration đúng trong data thì vào lại phòng
+    //    panel không còn 0:00/0:00 trong lúc chờ player báo.
     nowPlaying: {
       id: 'rZHrffKAc6k',
       title: 'T1 vs BLG Highlights | Grand Finals | Worlds 2024',
       by: 'LoL Esports',
-      duration: '?',
+      duration: '22:54',
     },
     queue: [
-      { id: 'rZHrffKAc6k', title: 'T1 vs BLG Highlights | Grand Finals | Worlds 2024', by: 'LoL Esports', duration: '?', votes: 0, byGuest: 'Cả rạp' },
+      { id: 'rZHrffKAc6k', title: 'T1 vs BLG Highlights | Grand Finals | Worlds 2024', by: 'LoL Esports', duration: '22:54', votes: 0, byGuest: 'Cả rạp' },
       { id: 'abPmZCZZrFA', title: 'SƠN TÙNG M-TP | ĐỪNG LÀM TRÁI TIM ANH ĐAU', by: 'M-TP Entertainment', duration: '5:26', votes: 2, byGuest: 'Mr. Sun' },
       { id: '2WAXXlK3tAA', title: 'Thêm Một Lần Đau (Remake Version) – NDMT', by: 'NDMT', duration: '4:37', votes: 1, byGuest: 'NamCưBụ' },
     ],
