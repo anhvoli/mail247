@@ -262,6 +262,78 @@ html, body { overflow-x: clip; }
 
 /* --- Karaoke: panel chấm điểm + ghi chú giờ mở cửa --- */
 .score-box { border: 1px solid var(--gold); border-radius: 10px; padding: 10px; margin-bottom: 12px; font-size: 13px; }
+
+/* ============ Quản trị Live (bảng admin, theo ảnh admin trà đá) ============ */
+.admin-wrap { min-height: 100%; background: #0a0d12; padding: 0 18px 60px; position: relative; overflow-x: clip; }
+.admin-topbar { display: flex; align-items: center; gap: 12px; padding: 12px 0; flex-wrap: wrap;
+  position: sticky; top: 0; z-index: 20; background: #0a0d12; }
+.admin-topbar .spacer { flex: 1; }
+.admin-note { color: var(--gold); font-size: 12px; }
+.admin-progress { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 6px 0 14px; }
+.admin-progress span { font-size: 13px; color: var(--text); }
+.admin-bar { height: 8px; background: #0f141b; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; margin-top: 6px; }
+.admin-bar > div { height: 100%; background: var(--gold); }
+.admin-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; max-width: 1200px; margin: 0 auto; }
+.admin-card { background: #141a26; border: 1px solid #6b5518; border-radius: 14px; padding: 16px; }
+.admin-card h3 { margin: 0 0 12px; color: #ffd75e; font-size: 15px; }
+.admin-card h4 { margin: 12px 0 6px; color: #ffd75e; }
+.admin-span2 { grid-column: span 2; }
+.admin-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.admin-row input, .admin-field input, .admin-field select { flex: 1; min-width: 0; padding: 10px 12px;
+  border-radius: 10px; border: 1px solid var(--line); background: #0f141b; color: var(--text); }
+.admin-field { margin: 12px 0; }
+.admin-field label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+.admin-field input[type="range"] { padding: 0; }
+.admin-hint { color: var(--muted); font-size: 12px; margin: 8px 0; line-height: 1.5; }
+.admin-btn { padding: 10px 16px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel2);
+  color: var(--text); font-weight: 700; min-height: 40px; }
+.admin-btn.gold { background: #f0a832; border-color: #f0a832; color: #111; }
+.admin-btn.gold:disabled { opacity: .45; cursor: not-allowed; }
+.admin-btn.danger { background: #5a1a1a; border-color: #7a2a2a; color: #ffb3b3; }
+.admin-btn.ghost { background: transparent; }
+.admin-check { display: flex; gap: 8px; align-items: center; font-weight: 700; cursor: pointer; }
+.admin-check input { width: 18px; height: 18px; accent-color: var(--gold); }
+.admin-gifts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.admin-gift { padding: 11px 8px; border-radius: 10px; border: 1px solid var(--line); background: #0f141b;
+  color: var(--text); font-weight: 700; font-size: 13px; }
+.admin-gift:hover { border-color: var(--gold); }
+.admin-gift.invite { border-color: #3b82f6; color: #93c5fd; grid-column: span 2; }
+.admin-banner-red { width: 100%; margin-top: 10px; padding: 12px; border-radius: 10px; border: 1px solid #a33;
+  background: linear-gradient(90deg, #7a1a1a, #a3521a); color: #ffe1a1; font-weight: 800; font-size: 13px; text-align: center; }
+.admin-topboard { margin-top: 14px; border-top: 1px dashed var(--line); padding-top: 4px; }
+.admin-top-row { display: flex; justify-content: space-between; padding: 6px 2px; border-bottom: 1px solid #ffffff10; font-size: 14px; }
+.admin-comments { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+.admin-comment { background: #0f141b; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 14px; line-height: 1.45; }
+.admin-time { color: var(--muted); font-size: 11px; margin-left: 6px; }
+.admin-seated { color: var(--gold); font-size: 12px; margin-left: 8px; }
+.admin-tts-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 12px; align-items: start; }
+.admin-range-labels { display: flex; justify-content: space-between; color: var(--muted); font-size: 11px; }
+.admin-log { background: #000; border: 1px solid var(--line); border-radius: 10px; padding: 12px;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 12px; line-height: 1.7;
+  max-height: 220px; overflow: auto; color: #b8e986; margin: 8px 0; }
+.admin-foot { max-width: 1200px; margin: 18px auto 0; color: var(--muted); font-size: 12px; text-align: center; }
+.admin-fortune { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); z-index: 50;
+  background: #2a2113; border: 1px solid #ffd75e; color: #ffe9a8; border-radius: 14px; padding: 14px 20px;
+  max-width: min(560px, 92vw); text-align: center; box-shadow: 0 8px 30px #000a; font-size: 14px; }
+.admin-fortune-kicker { color: #ffd75e; font-weight: 800; margin-bottom: 4px; text-transform: uppercase; font-size: 12px; letter-spacing: .08em; }
+.admin-rain { position: fixed; inset: 0; z-index: 40; pointer-events: none; overflow: hidden; }
+.admin-rain span { position: absolute; top: -40px; font-size: 26px; animation: admin-fall 4s linear infinite; }
+@keyframes admin-fall { to { transform: translateY(110vh) rotate(160deg); } }
+.admin-lotuses { position: fixed; inset: 0; z-index: 40; pointer-events: none; overflow: hidden; }
+.admin-lotuses span { position: absolute; bottom: -30px; font-size: 30px; animation: admin-rise 2.5s ease-out forwards; }
+@keyframes admin-rise { to { transform: translateY(-70vh) scale(1.4); opacity: 0; } }
+@media (max-width: 900px) {
+  .admin-grid { grid-template-columns: 1fr; }
+  .admin-span2 { grid-column: span 1; }
+  .admin-progress { grid-template-columns: 1fr; }
+  .admin-tts-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 640px) {
+  .admin-wrap { padding: 0 12px 48px; }
+  .admin-gifts { grid-template-columns: 1fr; }
+  .admin-gift.invite { grid-column: span 1; }
+  .admin-tts-grid { grid-template-columns: 1fr; }
+}
 .score-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
 .score-btn { min-width: 34px; min-height: 34px; border-radius: 8px; border: 1px solid var(--line); background: #141a26; color: var(--text); cursor: pointer; font-weight: 700; }
 .score-btn.on { border-color: #ffd75e; color: #ffd75e; }

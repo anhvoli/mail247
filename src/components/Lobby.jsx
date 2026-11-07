@@ -14,7 +14,7 @@ function karaokeOpenNow() {
   } catch { return true; }
 }
 
-export default function Lobby({ guest, exp, nowPlayingByRoom, onEnterRoom, onOpenPrivateRooms, onLeave }) {
+export default function Lobby({ guest, exp, nowPlayingByRoom, onEnterRoom, onOpenPrivateRooms, onOpenAdmin, onLeave }) {
   const level = Math.floor(exp / LV_EXP) + 1;
   const progress = exp % LV_EXP;
   return (
@@ -29,6 +29,7 @@ export default function Lobby({ guest, exp, nowPlayingByRoom, onEnterRoom, onOpe
           <div className="exp-bar"><div style={{ width: `${(progress / LV_EXP) * 100}%` }} /></div>
           <div style={{ fontSize: 12, color: '#9aa5b1' }}>Còn {LV_EXP - progress} EXP nữa để lên LV{level + 1}</div>
           <button className="btn ghost" onClick={onLeave} style={{ marginTop: 8 }}>Đổi tên</button>
+          <button className="btn" onClick={onOpenAdmin} style={{ marginTop: 8, marginLeft: 8, background: '#f0a832' }}>⚙️ Quản trị Live</button>
         </div>
       </header>
 

@@ -6,6 +6,7 @@ import ErrorBoundary from './ErrorBoundary';
 import SeatMap from './SeatMap';
 import { EMOJI_GROUPS, GESTURES, MISSIONS } from '../data';
 import { KARAOKE_RULES } from '../karaoke-room-spec';
+import { getCameraPreset, subscribeCameraPreset } from '../adminCamera';
 
 // Karaoke mở 19:00–23:00 giờ VN (theo bản gốc). Ngoài giờ vẫn vào xem thử
 // được, chỉ hiện ghi chú — không chặn cửa.
@@ -147,7 +148,9 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
   const [gesture, setGesture] = useState(null);
   const [toast, setToast] = useState('');
   const [queueUrl, setQueueUrl] = useState('');
-  const [camera, setCamera] = useState('overview');
+  // Góc quay do ADMIN chỉnh (quy tắc 07/11: web client chỉ xem, không đổi góc).
+  // Preset lấy từ adminCamera.js theo từng phòng.
+  const [camera, setCamera] = useState(() => getCameraPreset(room.id));
   const [controlsOn, setControlsOn] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   // Số lần ngắm lại camera (fix 07/11 ~00:30): AvatarWalk chỉnh camera trực
@@ -161,6 +164,16 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
     if (mySeat && prevSeatRef.current !== mySeat) setCameraNonce((n) => n + 1);
     prevSeatRef.current = mySeat;
   }, [mySeat]);
+  // Nghe admin đổi góc quay của đúng phòng này: đổi góc ngay + ngắm lại
+  // camera (tăng cameraNonce để Rig ngắm lại như khi bấm nút góc trước đây).
+  // Đổi phòng thì lấy preset của phòng mới.
+  useEffect(() => {
+    setCamera(getCameraPreset(room.id));
+    return subscribeCameraPreset(room.id, (preset) => {
+      setCamera(preset);
+      setCameraNonce((n) => n + 1);
+    });
+  }, [room.id]);
   // Thời gian phát hiện tại CHỈ ghi vào ref (poll player mỗi giây): trước đây
   // setPlayhead mỗi giây làm RoomView render lại toàn bộ — kể cả Canvas R3F
   // và toàn bộ cảnh 3D — nên phòng bị giật mỗi giây. Giờ interval chỉ ghi
@@ -380,21 +393,11 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
               skipVoted={skipVoted} onVoteSkip={doVoteSkip} />
             <RightRail queueCount={queue.length}
               onTab={setTab} onToast={(t) => showToast(t)} gestureRowRef={gestureRowRef} />
-            {camera === 'screen' && (
-              <button className="focus-exit" onClick={() => { setCamera('overview'); setCameraNonce((n) => n + 1); }}>
-                ✕ Thoát góc tập trung màn hình
-              </button>
-            )}
             <span className="cam-label">{PRESETS[camera].label}</span>
             <span className="wasd-hint">{isKaraoke ? 'Bấm vào ghế để ngồi · Chấm điểm ca sĩ sau mỗi tiết mục' : 'W A S D để đi lại · Space để nhảy · E hoặc bấm vào ghế để ngồi'}</span>
           </div>
           <div className="controls">
             <span><b>Đang chiếu:</b> {current.title} · {current.by}</span>
-            <span className="cam-btns">
-              {Object.entries(PRESETS).map(([key, p]) => (
-                <button key={key} className={camera === key ? 'on' : ''} onClick={() => { setCamera(key); setCameraNonce((n) => n + 1); }}>{p.label}</button>
-              ))}
-            </span>
             <span className="cam-btns">
               <button className="player-controls-btn" onClick={() => setControlsOn((v) => !v)} title="Bật/tắt nút điều khiển của trình phát YouTube">
                 {controlsOn ? 'Ẩn điều khiển trình phát' : 'Hiện điều khiển trình phát'}

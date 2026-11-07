@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import GuestSetup from './components/GuestSetup';
 import Lobby from './components/Lobby';
+import AdminPanel from './components/AdminPanel';
 import RoomView from './components/RoomView';
 import PrivateRooms from './components/PrivateRooms';
 import Sanh3D, { SANH_DOORS } from './components/Sanh3D';
@@ -125,6 +126,9 @@ export default function App() {
   });
   const [expState, setExpState] = useState(loadExp);
   const [roomId, setRoomId] = useState(null);
+  // Bảng Quản trị Live (xem AdminPanel.jsx): live mô phỏng + TTS + quà +
+  // nhạc local + log nội bộ. Mở từ sảnh, không động vào state các phòng.
+  const [showAdmin, setShowAdmin] = useState(false);
   // Màn Phòng riêng (danh sách + tạo phòng).
   const [showPrivate, setShowPrivate] = useState(false);
   // Phòng riêng nâng state lên App (xem PRIVATE_ROOMS_WIRING) để phòng không
@@ -291,6 +295,9 @@ export default function App() {
   }, []);
 
   if (!guest) return <GuestSetup onEnter={enterGuest} />;
+  if (showAdmin) {
+    return <AdminPanel guest={guest} onBack={() => setShowAdmin(false)} />;
+  }
   if (showPrivate) {
     return (
       <PrivateRooms
@@ -303,7 +310,7 @@ export default function App() {
     );
   }
   if (!roomId) {
-    return <Lobby guest={guest} exp={expState.exp} nowPlayingByRoom={liveNowPlaying} onEnterRoom={setRoomId} onOpenPrivateRooms={() => setShowPrivate(true)} onLeave={() => { setGuest(null); localStorage.removeItem(GUEST_KEY); }} />;
+    return <Lobby guest={guest} exp={expState.exp} nowPlayingByRoom={liveNowPlaying} onEnterRoom={setRoomId} onOpenPrivateRooms={() => setShowPrivate(true)} onOpenAdmin={() => setShowAdmin(true)} onLeave={() => { setGuest(null); localStorage.removeItem(GUEST_KEY); }} />;
   }
   if (roomId === 'sanh') {
     // Sảnh 3D: video + chat dùng chung state Rạp phim (roomState đang chạy với 'phim').
