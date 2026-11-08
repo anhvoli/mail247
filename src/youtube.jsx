@@ -43,11 +43,19 @@ function loadYouTubeApi() {
         reject(new Error('YouTube API unavailable'));
         return;
       }
-      const tag = document.createElement('script');
-      tag.src = 'https://www.youtube.com/iframe_api';
-      tag.async = true;
-      tag.onerror = () => { setTimeout(() => tryLoad(attempt + 1), 2000); };
-      document.head.appendChild(tag);
+      // N-06: tái dùng 1 thẻ <script> duy nhất — mỗi lượt thử lại trước
+      // đây append thêm 1 thẻ nên khi YouTube bị chặn thẻ tích tụ trong
+      // <head>. Nếu thẻ đã có (đang chờ tải / đã tải) thì không append nữa,
+      // chỉ chờ onYouTubeIframeAPIReady / timeout 8s; thẻ lỗi tự gỡ mình
+      // trong onerror để lượt thử sau append thẻ mới.
+      const existingTag = document.querySelector('script[src*="iframe_api"]');
+      if (!existingTag) {
+        const tag = document.createElement('script');
+        tag.src = 'https://www.youtube.com/iframe_api';
+        tag.async = true;
+        tag.onerror = () => { tag.remove(); setTimeout(() => tryLoad(attempt + 1), 2000); };
+        document.head.appendChild(tag);
+      }
       const prev = window.onYouTubeIframeAPIReady;
       window.onYouTubeIframeAPIReady = () => {
         if (prev) prev();
@@ -71,6 +79,12 @@ const IFRAME_ALLOW = 'accelerometer; autoplay; clipboard-write; encrypted-media;
 // module để player mount lại vẫn nhớ đã bật tiếng hay chưa. Engine nền
 // (background) luôn tắt tiếng và không đụng tới trạng thái này.
 let sharedMuted = true;
+
+// N-07: cho App.jsx (Sảnh) đồng bộ trạng thái tiếng sang phòng — Sảnh gọi
+// setSharedMuted(false) khi bật tiếng thì player mới trong phòng đọc
+// sharedMuted sẽ không tắt tiếng lại. Mặc định vẫn true, engine nền vẫn
+// luôn tắt tiếng và không đụng tới trạng thái này.
+export function setSharedMuted(v) { sharedMuted = v; }
 
 export default function YouTubePlayer({ videoId, onEnded, onPlayerReady, controls = true, startSeconds = 0, onMutedChange, background = false }) {
   // Container do React sở hữu, JSX không render con nào bên trong — mọi node
@@ -158,6 +172,7 @@ export default function YouTubePlayer({ videoId, onEnded, onPlayerReady, control
     let cancelled = false;
     let player = null;
     let upgradeTimer = null;
+    let teardownFallback = null; // dọn adapter fallback (S-03), xem dưới
     const container = containerRef.current;
     if (!container) return undefined;
     container.innerHTML = ''; // dọn mount/iframe cũ (không có node React nào ở đây)
@@ -264,6 +279,78 @@ export default function YouTubePlayer({ videoId, onEnded, onPlayerReady, control
         container.appendChild(muteBtn);
         muteBtn.style.display = mutedRef.current ? 'block' : 'none';
       }
+      // S-03: fallback iframe trước đây KHÔNG gọi onPlayerReady nên RoomView
+      // không có player để poll giờ → đồng hồ kẹt 0:00, hết bài không tự
+      // chuyển. Nay gọi onPlayerReady (qua handleReady, như đường YT.Player)
+      // với adapter tối thiểu đọc giờ/trạng thái qua postMessage của YouTube
+      // IFrame API (iframe đã có enablejsapi=1). Adapter tự poll
+      // getCurrentTime/getDuration mỗi 500ms + lắng nghe infoDelivery /
+      // onStateChange; state ended (0) mà video đã phát thật thì bắn onEnded
+      // như đường YT.Player (watchdog trong file này + poll của RoomView
+      // cũng đọc qua adapter nên đồng hồ chạy). Đường nâng cấp lên YT.Player
+      // khi API xuất hiện (interval bên dưới) được GIỮ NGUYÊN — lúc nâng
+      // cấp thành công thì dọn adapter (teardownFallback).
+      let fbCur = 0;
+      let fbDur = 0;
+      let fbState = -1;
+      let fbPoll = null;
+      const postToPlayer = (func, args) => {
+        try {
+          iframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func, args: args === undefined ? '' : args }), 'https://www.youtube.com');
+        } catch { /* iframe chưa sẵn — lệnh rớt, không sao (URL đã autoplay/mute) */ }
+      };
+      const onFbMessage = (e) => {
+        if (e.source !== iframe.contentWindow) return;
+        let data;
+        try { data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; } catch { return; }
+        if (!data || typeof data !== 'object') return;
+        if (data.event === 'infoDelivery' && data.info) {
+          const info = data.info;
+          if (typeof info.currentTime === 'number') fbCur = info.currentTime;
+          if (typeof info.duration === 'number') fbDur = info.duration;
+          if (typeof info.playerState === 'number') fbState = info.playerState;
+        } else if (data.event === 'onStateChange' && typeof data.info === 'number') {
+          fbState = data.info;
+        }
+        if (fbState === 1 || (fbDur > 0 && fbCur > 2)) playedRef.current = true;
+        if (fbState === 0 && playedRef.current) fireEnded();
+      };
+      window.addEventListener('message', onFbMessage);
+      fbPoll = setInterval(() => {
+        if (cancelled) return;
+        // 'listening' đăng ký nhận infoDelivery; getter trả về qua infoDelivery.
+        try { iframe.contentWindow.postMessage(JSON.stringify({ event: 'listening' }), 'https://www.youtube.com'); } catch { /* ignore */ }
+        postToPlayer('getCurrentTime');
+        postToPlayer('getDuration');
+      }, 500);
+      teardownFallback = () => {
+        if (fbPoll) { clearInterval(fbPoll); fbPoll = null; }
+        window.removeEventListener('message', onFbMessage);
+      };
+      const fallbackAdapter = {
+        getCurrentTime: () => fbCur,
+        getDuration: () => fbDur,
+        getPlayerState: () => fbState,
+        getVideoData: () => ({ video_id: videoIdRef.current }),
+        playVideo: () => postToPlayer('playVideo'),
+        pauseVideo: () => postToPlayer('pauseVideo'),
+        mute: () => postToPlayer('mute'),
+        unMute: () => { postToPlayer('unMute'); postToPlayer('setVolume', [100]); },
+        setVolume: (v) => postToPlayer('setVolume', [v]),
+        isMuted: () => mutedRef.current,
+        // Đổi bài khi đang ở fallback: đổi src tại chỗ (như nhánh
+        // fallbackIframeRef trong effect đổi video) + reset giờ đã poll.
+        loadVideoById: (vid, start) => {
+          fbCur = 0; fbDur = 0; fbState = -1;
+          loadedVideoIdRef.current = vid;
+          try {
+            iframe.src = `https://www.youtube.com/embed/${vid}?autoplay=1&mute=${mutedRef.current ? 1 : 0}&rel=0&enablejsapi=1&start=${Math.floor(start || 0)}`;
+          } catch { /* ignore */ }
+        },
+      };
+      // Áp trạng thái tiếng + xử lý video pending như đường YT.Player, và
+      // quan trọng nhất: RoomView nhận được player qua onPlayerReady.
+      handleReady(fallbackAdapter);
       // Chống tích tụ thẻ <script> khi YouTube bị chặn: mỗi lần
       // loadYouTubeApi() reject là 1 chu kỳ nạp đã thử đủ 3 lượt trong nội
       // bộ (mỗi lượt append 1 thẻ <script> iframe_api vào <head>). Interval
@@ -290,6 +377,9 @@ export default function YouTubePlayer({ videoId, onEnded, onPlayerReady, control
                 onError: () => handlePlayerError(),
               },
             });
+            // Nâng cấp thành công: dọn adapter fallback (S-03) — từ đây
+            // YT.Player thật là player duy nhất.
+            if (teardownFallback) { teardownFallback(); teardownFallback = null; }
           } catch { /* giữ iframe thường, watchdog không áp dụng được */ }
           return;
         }
@@ -317,6 +407,7 @@ export default function YouTubePlayer({ videoId, onEnded, onPlayerReady, control
       window.removeEventListener('pointerdown', onFirstGesture);
       window.removeEventListener('keydown', onFirstGesture);
       if (upgradeTimer) clearInterval(upgradeTimer);
+      if (teardownFallback) { teardownFallback(); teardownFallback = null; }
       try { if (player) player.destroy(); } catch { /* ignore */ }
       playerRef.current = null;
       if (container) container.innerHTML = '';

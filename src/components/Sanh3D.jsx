@@ -11,6 +11,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import YouTubePlayer from '../youtube';
+import { ScreenFace } from './shared3d';
 
 // Kích thước sảnh: x ∈ [-12, 12], z ∈ [-10, 10], tường cao 7.
 const BOUNDS = { x: 11, zMin: -8.6, zMax: 9 };
@@ -75,37 +76,9 @@ function makeSignTexture(text) {
   return tex;
 }
 
-// Mặt màn hình: thumbnail video làm lớp nền dưới iframe live (giống
-// Cinema3D.ScreenFace — YouTube không cho nhúng iframe làm texture WebGL).
-function ScreenFace({ videoId }) {
-  const [texture, setTexture] = useState(null);
-  useEffect(() => {
-    let alive = true;
-    const loader = new THREE.TextureLoader();
-    loader.setCrossOrigin('anonymous');
-    loader.load(
-      `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-      (tex) => { if (alive) setTexture(tex); },
-      undefined,
-      () => { if (alive) setTexture(null); },
-    );
-    return () => { alive = false; };
-  }, [videoId]);
-  if (!texture) {
-    return (
-      <mesh position={[0, SCREEN.y, SCREEN.z]}>
-        <planeGeometry args={[SCREEN.w, SCREEN.h]} />
-        <meshStandardMaterial color="#0b0b0b" emissive="#9db8ff" emissiveIntensity={0.55} />
-      </mesh>
-    );
-  }
-  return (
-    <mesh position={[0, SCREEN.y, SCREEN.z]}>
-      <planeGeometry args={[SCREEN.w, SCREEN.h]} />
-      <meshBasicMaterial map={texture} toneMapped={false} />
-    </mesh>
-  );
-}
+// (ScreenFace dùng chung ở ./shared3d — N-09. Vị trí/kích thước màn sảnh
+// truyền qua prop ở Hall: width=SCREEN.w, height=SCREEN.h,
+// position=[0, SCREEN.y, SCREEN.z].)
 
 // Video LIVE trên mặt màn hình sảnh (cùng kỹ thuật drei Html transform như
 // Cinema3D.LiveScreen: div 1200×675px + distanceFactor 4 = đúng 12×6.75).
@@ -197,6 +170,9 @@ function Wanderer({ color, name, from, to, speed = 0.5, phase = 0 }) {
 // Cửa vào phòng: khung + mặt cửa phát sáng có tên phòng, vòng xanh trên sàn.
 function Door({ door, near }) {
   const tex = useMemo(() => makeDoorTexture({ title: door.label, sub: door.sub, accent: door.accent }), [door]);
+  // N-02: dispose texture cửa khi unmount (cùng lỗi rò CanvasTexture như
+  // ScreenFace/EventDecor — mỗi lần vào lại Sảnh rò 4 texture cửa).
+  useEffect(() => () => { tex.dispose(); }, [tex]);
   return (
     <group position={door.pos} rotation={[0, door.rotY, 0]}>
       {/* Khung cửa */}
@@ -236,7 +212,17 @@ function MyAvatar({ guest, onNearDoor, onEnterDoor, onOpenChat }) {
   const gl = useThree((s) => s.gl);
 
   useEffect(() => {
+    // S-01: bỏ qua phím khi đang gõ trong ô nhập (chat, dán link...) —
+    // copy đúng guard isTyping() của AvatarWalk.jsx:168-173. Không có
+    // guard này thì gõ "w"/"e"/dấu cách trong chat cũng làm avatar chạy,
+    // Space bị preventDefault nên không gõ được dấu cách, và gõ "e" gần
+    // cửa thì bị kéo thẳng vào phòng.
+    const isTyping = () => {
+      const el = document.activeElement;
+      return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
+    };
     const down = (e) => {
+      if (isTyping()) return;
       keys.current[e.code] = true;
       if (e.code === 'Enter' && onOpenChat) onOpenChat();
       if (e.code === 'KeyE' && nearDoor.current && onEnterDoor) onEnterDoor(nearDoor.current);
@@ -328,6 +314,8 @@ function MyAvatar({ guest, onNearDoor, onEnterDoor, onOpenChat }) {
 
 function Hall({ videoId, showLive, screenOff, onEnded, onPlayerReady, controls, startSeconds, guests, myGuest, onNearDoor, onEnterDoor, onOpenChat }) {
   const signTex = useMemo(() => makeSignTexture('SẢNH 3D  •  ĐI LẠI TỰ DO  •  TỐI ĐA 40 NGƯỜI'), []);
+  // N-02: dispose texture biển tên sảnh khi unmount.
+  useEffect(() => () => { signTex.dispose(); }, [signTex]);
   const [nearDoor, setNearDoor] = useState(null);
   const handleNearDoor = (id) => { setNearDoor(id); onNearDoor?.(id); };
   return (
@@ -386,7 +374,7 @@ function Hall({ videoId, showLive, screenOff, onEnded, onPlayerReady, controls, 
         </mesh>
       ) : (
         <>
-          <ScreenFace videoId={videoId} />
+          <ScreenFace videoId={videoId} width={SCREEN.w} height={SCREEN.h} position={[0, SCREEN.y, SCREEN.z]} />
           {showLive && (
             <LiveScreen videoId={videoId} onEnded={onEnded} onPlayerReady={onPlayerReady}
               controls={controls} startSeconds={startSeconds} />
@@ -424,6 +412,10 @@ export default function Sanh3D({
   onEnterDoor,
   onOpenChat,
 }) {
+  // M-03: Sảnh GIỮ frameloop mặc định ("always"), KHÔNG đổi sang "demand"
+  // như Rạp phim/Karaoke — 2 Wanderer đi lại liên tục nên cảnh không bao
+  // giờ tĩnh: demand sẽ bắt Wanderer invalidate từng frame, tức là vòng
+  // render vẫn chạy 60fps mà chỉ thêm code, không tiết kiệm được frame nào.
   return (
     <Canvas camera={{ position: [0, 6, 18], fov: 55 }}>
       <color attach="background" args={['#05070a']} />

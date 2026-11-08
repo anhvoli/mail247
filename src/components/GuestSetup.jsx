@@ -19,13 +19,16 @@ export default function GuestSetup({ onEnter }) {
         <p>Tên của bạn được in trên áo. Tin nhắn sẽ hiện trên đầu nhân vật. Không cần tài khoản — vào là xem chung.</p>
         <div className="field">
           <label>Tên in trên áo</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Mọi người gọi bạn là gì?" maxLength={20} />
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Mọi người gọi bạn là gì?" maxLength={20}
+            onKeyDown={(e) => e.key === 'Enter' && submit()} />
         </div>
         <div className="field">
           <label>Giới tính / Ngoại hình</label>
           <div className="shirt-row">
+            {/* Giới tính đổi mẫu avatar xem trước (N-08): trước đây gender
+                chỉ lưu vào guest mà không chỗ nào dùng. */}
             <div className="shirt-avatar" style={{ background: color.hex }}>
-              {name.trim() || 'Tên bạn'}
+              {gender === 'Nữ' ? '👩 ' : '👨 '}{name.trim() || 'Tên bạn'}
             </div>
             <div>
               <div className="color-dots">

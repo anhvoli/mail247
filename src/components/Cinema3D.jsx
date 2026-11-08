@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { seatId } from '../data';
 import YouTubePlayer from '../youtube';
 import AvatarWalk from './AvatarWalk';
+import { PleatedCurtain, Rig, ScreenFace } from './shared3d';
 
 // 4 góc camera như bản gốc: toàn cảnh, từ ghế, tập trung màn hình, từ màn chiếu về hàng ghế.
 // Góc "từ màn chiếu" phải đứng TRƯỚC mặt màn hình (z = -6.2, màn hình ở z = -8) rồi
@@ -21,60 +22,9 @@ export const CAMERA_PRESETS = {
   reverse: { label: 'Từ màn chiếu về hàng ghế', pos: [0, 2.6, -6.2], look: [0, 1.0, 10] },
 };
 
-// Đổi góc camera: đặt thẳng vị trí + hướng nhìn khi đổi preset (không lerp
-// từng frame — đổi góc phải tức thì và xác định, không phụ thuộc trạng thái
-// lerp cũ hay số frame đã chạy). Canvas không bao giờ bị unmount/thay thế
-// khi đổi góc; chỉ có camera di chuyển.
-function Rig({ preset, reAim }) {
-  const camera = useThree((s) => s.camera);
-  useEffect(() => {
-    const p = CAMERA_PRESETS[preset];
-    camera.position.set(p.pos[0], p.pos[1], p.pos[2]);
-    camera.lookAt(p.look[0], p.look[1], p.look[2]);
-    camera.updateProjectionMatrix();
-    // reAim đổi mỗi lần bấm nút góc (kể cả bấm lại góc đang chọn) hoặc ngồi
-    // xuống ghế sau khi đi lại — vì AvatarWalk chỉnh camera trực tiếp nên
-    // chỉ đổi preset mới ngắm lại được, bấm lại góc cũ là state no-op và
-    // camera kẹt ở vị trí đi lại (fix 07/11 ~00:30).
-  }, [preset, camera, reAim]);
-  return null;
-}
-
-// Màn hình chiếu: hiển thị ảnh thumbnail của video đang chiếu làm LỚP NỀN
-// dưới iframe live (YouTube không cho nhúng iframe làm texture WebGL).
-// Khi iframe live bị ẩn (góc ghế / góc ngược — xem LiveScreen), mặt màn hình
-// vẫn có thumbnail nên không bao giờ trống. Nạp bằng TextureLoader.load có
-// onError (không dùng useLoader, để thumbnail lỗi thì mặt màn hình vẫn là tấm
-// phát sáng xanh, không vỡ cả rạp).
-function ScreenFace({ videoId, width, height }) {
-  const [texture, setTexture] = useState(null);
-  useEffect(() => {
-    let alive = true;
-    const loader = new THREE.TextureLoader();
-    loader.setCrossOrigin('anonymous');
-    loader.load(
-      `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-      (tex) => { if (alive) setTexture(tex); },
-      undefined,
-      () => { if (alive) setTexture(null); },
-    );
-    return () => { alive = false; };
-  }, [videoId]);
-  if (!texture) {
-    return (
-      <mesh position={[0, 2.6, -8]}>
-        <planeGeometry args={[width, height]} />
-        <meshStandardMaterial color="#0b0b0b" emissive="#9db8ff" emissiveIntensity={0.55} />
-      </mesh>
-    );
-  }
-  return (
-    <mesh position={[0, 2.6, -8]}>
-      <planeGeometry args={[width, height]} />
-      <meshBasicMaterial map={texture} toneMapped={false} />
-    </mesh>
-  );
-}
+// Rig / ScreenFace / PleatedCurtain dùng chung ở ./shared3d (N-09 —
+// trước đây mỗi file 3D một bản trùng nhau, chỉ khác bảng preset camera
+// của Rig và vị trí/kích thước màn hình của ScreenFace).
 
 // Màn hình chiếu LIVE (round 3): drei Html transform nhúng đúng iframe trình
 // phát YouTube lên mặt phẳng màn hình trong cảnh 3D — video chạy thật, đổi góc
@@ -111,28 +61,12 @@ function Screen({ videoId, isSky }) {
         <boxGeometry args={[width + 0.6, height + 0.6, 0.15]} />
         <meshStandardMaterial color="#1a1a1a" />
       </mesh>
-      <ScreenFace videoId={videoId} width={width} height={height} />
+      <ScreenFace videoId={videoId} width={width} height={height} position={[0, 2.6, -8]} />
     </group>
   );
 }
 
-// Rèm nhung đỏ xếp ly: nhiều nếp dọc xen kẽ 2 tông đỏ, hơi lệch z để tạo nếp gấp.
-function PleatedCurtain({ position, width, height, vertical = true }) {
-  const pleats = [];
-  const count = vertical ? Math.max(3, Math.round(width / 0.35)) : Math.max(3, Math.round(height / 0.35));
-  for (let i = 0; i < count; i++) {
-    const t = count === 1 ? 0 : i / (count - 1);
-    const shade = i % 2 === 0 ? '#a01f1f' : '#701414';
-    const offset = (i % 2 === 0 ? 0.09 : -0.09);
-    pleats.push(
-      <mesh key={i} position={vertical ? [(t - 0.5) * width, 0, offset] : [0, (t - 0.5) * height, offset]} rotation={[0, (i % 2 === 0 ? 0.18 : -0.18), 0]}>
-        <boxGeometry args={vertical ? [0.32, height, 0.22] : [width, 0.32, 0.22]} />
-        <meshStandardMaterial color={shade} roughness={0.9} />
-      </mesh>
-    );
-  }
-  return <group position={position}>{pleats}</group>;
-}
+// (PleatedCurtain dùng chung ở ./shared3d — N-09.)
 
 // Loa tháp lớn 2 bên màn hình: thùng đen + 3 loa tròn.
 function SpeakerTower({ position }) {
@@ -204,6 +138,11 @@ function EventDecor() {
   const blgTex = useMemo(() => makeVerticalBannerTexture({ bg: '#0077b6', title: 'BLG', sub: 'LPL', accent: '#ff7ab8' }), []);
   const topTex = useMemo(() => makeHorizontalBannerTexture({ text: 'BÁN KẾT  •  CKTG 2026  •  T1 vs BLG' }), []);
   const timeTex = useMemo(() => makeHorizontalBannerTexture({ text: '05:00  •  THỨ HAI 09.11.2026  •  BO5' }), []);
+  // N-02: CanvasTexture tạo bằng useMemo thì dispose khi unmount, nếu
+  // không mỗi lần vào lại Rạp phim rò 4 texture banner.
+  useEffect(() => () => {
+    t1Tex.dispose(); blgTex.dispose(); topTex.dispose(); timeTex.dispose();
+  }, [t1Tex, blgTex, topTex, timeTex]);
   return (
     <group>
       {/* Đèn màu nhẹ 2 bên sân khấu: đỏ bên T1, xanh bên BLG */}
@@ -322,6 +261,13 @@ const STARS = Array.from({ length: 40 }, (_, i) => {
 
 function Auditorium({ room, seats, mySeat, guest, videoId, showLive, onEnded, onPlayerReady, controls, startSeconds, hideMeSeat, showNames }) {
   const isSky = room.kind === 'sky';
+  // frameloop="demand" (M-03, pattern Arena3D): R3F không tự vẽ khi props
+  // đổi; các thứ làm đổi cảnh (bot đổi ghế, đổi bài, bật/tắt tên/live, ẩn
+  // hình người ngồi khi đi lại) phải gọi invalidate() để vẽ lại 1 frame.
+  // Rig lo invalidate khi đổi góc, ScreenFace lo khi thumbnail về,
+  // AvatarWalk tự invalidate trong useFrame khi đang đi lại.
+  const invalidate = useThree((s) => s.invalidate);
+  useEffect(() => { invalidate(); }, [seats, videoId, showLive, showNames, hideMeSeat, invalidate]);
   const seatMeshes = [];
   const tableMeshes = [];
   if (room.kind === 'cinema') {
@@ -490,9 +436,9 @@ export default function Cinema3D({ room, seats, mySeat, guest, cameraPreset, vid
   // ~200px và chồng lên nhau, che cả màn hình (round 4).
   const showNames = cameraPreset === 'overview' || cameraPreset === 'screen';
   return (
-    <Canvas camera={{ position: CAMERA_PRESETS[cameraPreset].pos, fov: 55 }}>
+    <Canvas frameloop="demand" camera={{ position: CAMERA_PRESETS[cameraPreset].pos, fov: 55 }}>
       <color attach="background" args={[room.kind === 'sky' ? '#0a1220' : '#05070a']} />
-      <Rig preset={cameraPreset} reAim={reAim} />
+      <Rig presets={CAMERA_PRESETS} preset={cameraPreset} reAim={reAim} />
       <AvatarWalk room={room} seats={seats} guest={guest} mySeat={mySeat}
         cameraPreset={cameraPreset} onPickSeat={onPickSeat} onWalkChange={setWalking} />
       <Auditorium room={room} seats={seats} mySeat={mySeat} guest={guest} videoId={videoId}

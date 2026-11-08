@@ -1,14 +1,23 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import GuestSetup from './components/GuestSetup';
 import Lobby from './components/Lobby';
-import AdminPanel from './components/AdminPanel';
 import RoomView from './components/RoomView';
 import PrivateRooms from './components/PrivateRooms';
-import Sanh3D, { SANH_DOORS } from './components/Sanh3D';
 import ErrorBoundary from './components/ErrorBoundary';
 import { useRoom } from './useRoom';
 import { BOT_CHAT_LINES, BOT_NAMES, ROOMS } from './data';
 import { SEED_PRIVATE_ROOMS } from './private-rooms-spec';
+import { SANH_SPEC } from './sanh-spec';
+import { getPlayhead } from './playheadCache';
+import { setSharedMuted } from './youtube';
+
+// Code-split (N-01): AdminPanel chỉ admin dùng, Sanh3D nặng three.js — tách
+// khỏi bundle chính, nạp khi cần. SANH_DOORS không import tĩnh từ Sanh3D
+// nữa (sẽ kéo cả module vào bundle chính) mà lấy nhãn cửa từ SANH_SPEC.
+// Ảnh cheer giữ base64 trong cheerImages.js, KHÔNG đưa ra public/:
+// snapshot-push không đẩy được file nhị phân.
+const AdminPanel = lazy(() => import('./components/AdminPanel'));
+const Sanh3D = lazy(() => import('./components/Sanh3D'));
 
 const GUEST_KEY = 'rapchieu-guest';
 const EXP_KEY = 'rapchieu-exp';
@@ -33,17 +42,48 @@ function SanhView({ guest, video, roomState, onLeave, onEnterDoor }) {
   const [nearDoor, setNearDoor] = useState(null);
   const playerRef = useRef(null);
   const chatInputRef = useRef(null);
-  const nearDoorLabel = nearDoor ? (SANH_DOORS.find((d) => d.id === nearDoor)?.label || nearDoor) : null;
+  // Thử lại unMute khi bật tiếng ở chế độ fallback (M-06): lệnh unMute gửi
+  // lúc player chưa boot xong sẽ rớt lặng (iframe mới tạo, chưa nhận lệnh)
+  // mà nhãn thì đã lật — thử lại một lần sau 3s để tiếng thật sự bật.
+  // Hủy khi bấm tắt lại hoặc rời sảnh để không bật tiếng muộn sai ý.
+  const soundRetryRef = useRef(null);
+  useEffect(() => () => {
+    if (soundRetryRef.current) { clearTimeout(soundRetryRef.current); soundRetryRef.current = null; }
+  }, []);
+  // Mirror của state `muted` để đọc trong onPlayerReady (closure của
+  // callback đó giữ state cũ).
+  const mutedStateRef = useRef(true);
+  // Nhắc lại unMute sau 3s (M-06): lệnh unMute gửi lúc player chưa boot
+  // xong sẽ rớt lặng — nhắc lại khi player đã sẵn sàng thì tiếng bật thật.
+  const scheduleUnmuteRetry = () => {
+    if (soundRetryRef.current) { clearTimeout(soundRetryRef.current); soundRetryRef.current = null; }
+    soundRetryRef.current = setTimeout(() => {
+      soundRetryRef.current = null;
+      const p2 = playerRef.current;
+      try { if (p2?.unMute) p2.unMute(); if (p2?.setVolume) p2.setVolume(100); } catch { /* ignore */ }
+    }, 3000);
+  };
+  const nearDoorLabel = nearDoor ? (SANH_SPEC.doors.find((d) => d.id === nearDoor)?.label || nearDoor) : null;
 
   // "Bật tiếng": YouTubePlayer không có prop muted — giữ player từ
   // onPlayerReady rồi gọi unMute()/setVolume(100) hoặc mute().
+  // Chỉ lật nhãn khi đã có player thật (M-06): ở chế độ fallback mà
+  // playerRef còn null thì lật nhãn là lừa người xem (bấm "Bật tiếng" mà
+  // tiếng vẫn tắt). Đồng thời đồng bộ sharedMuted để vào phòng sau đó
+  // player mới không bị tắt tiếng lại (N-07).
   const toggleSound = () => {
     const p = playerRef.current;
+    if (!p) return;
+    if (soundRetryRef.current) { clearTimeout(soundRetryRef.current); soundRetryRef.current = null; }
+    const next = !muted;
     try {
       if (muted) { if (p?.unMute) p.unMute(); if (p?.setVolume) p.setVolume(100); }
       else if (p?.mute) p.mute();
     } catch { /* ignore */ }
-    setMuted(!muted);
+    mutedStateRef.current = next;
+    setMuted(next);
+    setSharedMuted(next);
+    if (muted) scheduleUnmuteRetry();
   };
 
   const sendChat = () => {
@@ -68,19 +108,38 @@ function SanhView({ guest, video, roomState, onLeave, onEnterDoor }) {
         <div className="stage">
           <div className="view3d" style={{ height: 'min(60vh, 560px)' }}>
             <ErrorBoundary>
+              <Suspense fallback={<div style={{ padding: 40, color: '#9aa5b1' }}>Đang tải sảnh 3D…</div>}>
               <Sanh3D
                 videoId={video?.id || ROOMS.phim.nowPlaying.id}
                 showLive
                 screenOff={screenOff}
                 onEnded={() => { /* sảnh chỉ xem ké video Rạp phim — không tự chuyển bài ở đây */ }}
-                onPlayerReady={(p) => { playerRef.current = p; }}
+                onPlayerReady={(p) => {
+                  playerRef.current = p;
+                  // Đồng bộ nhãn với trạng thái thật (M-06): nếu người xem đã
+                  // chạm/bấm Bật tiếng trước khi player sẵn sàng thì doUnmute
+                  // đã bật tiếng qua handleReady — nhãn phải theo, không để
+                  // kẹt ở "Bật tiếng" trong khi tiếng đang mở. Nhắc lại
+                  // unMute phòng khi lệnh ở handleReady rớt lúc iframe chưa boot.
+                  try {
+                    if (mutedStateRef.current && p && p.isMuted && !p.isMuted()) {
+                      mutedStateRef.current = false;
+                      setMuted(false);
+                      setSharedMuted(false);
+                      scheduleUnmuteRetry();
+                    }
+                  } catch { /* ignore */ }
+                }}
                 controls
-                startSeconds={0}
+                // Tiếp tục từ vị trí Rạp phim đang chiếu (M-06) thay vì phát
+                // lại từ giây 0 — đọc từ playheadCache dùng chung với RoomView.
+                startSeconds={getPlayhead('phim')?.cur ?? 0}
                 myGuest={guest}
                 onNearDoor={setNearDoor}
                 onEnterDoor={onEnterDoor}
                 onOpenChat={() => chatInputRef.current?.focus()}
               />
+              </Suspense>
             </ErrorBoundary>
             {nearDoorLabel && <span className="cam-label">Đang đứng trước cửa {nearDoorLabel} — bấm E để vào</span>}
             <span className="wasd-hint">W A S D để đi lại · Shift chạy · Space nhảy · E vào cửa · Enter chat</span>
@@ -134,13 +193,19 @@ export default function App() {
   // Phòng riêng nâng state lên App (xem PRIVATE_ROOMS_WIRING) để phòng không
   // mất khi quay lại sảnh; khởi tạo bằng phòng mẫu trong spec.
   const [privateRooms, setPrivateRooms] = useState(SEED_PRIVATE_ROOMS);
+  // Định nghĩa phòng riêng đã dựng sẵn, key theo id (S-02): KHÔNG ghi đè
+  // vào ROOMS nữa — ROOMS chỉ còn phòng công khai nên Lobby không bao giờ
+  // render phòng riêng, và mọi đường vào phòng riêng đều qua
+  // enterPrivateRoom (hỏi mật khẩu). useRoom nhận thẳng object này.
+  const [privateRoomDefs, setPrivateRoomDefs] = useState({});
+  const activeRoom = roomId ? (ROOMS[roomId] || privateRoomDefs[roomId] || null) : null;
   // Bài đang chiếu thật của từng phòng (ghi lại mỗi lần đổi bài) — để thẻ
   // "Đang chiếu" ở sảnh luôn khớp với bài đang phát, và vào lại phòng thì
   // tiếp tục bài đó thay vì quay về bài mẫu.
   const [liveNowPlaying, setLiveNowPlaying] = useState({});
   // Sảnh 3D không có trong ROOMS và không dùng useRoom — lúc ở sảnh, hook
   // vẫn chạy với 'phim' để giữ state Rạp phim (video + chat dùng chung).
-  const roomState = useRoom(roomId && roomId !== 'sanh' ? roomId : 'phim', guest?.name || 'Khách', roomId ? liveNowPlaying[roomId] : null);
+  const roomState = useRoom(roomId && roomId !== 'sanh' ? roomId : 'phim', guest?.name || 'Khách', roomId ? liveNowPlaying[roomId] : null, activeRoom);
   const roomStateRef = useRef(roomState);
   roomStateRef.current = roomState;
 
@@ -165,7 +230,7 @@ export default function App() {
     // effect áp lại làm bài đang chiếu nhảy qua lại giữa 2 phòng (fix 07/11
     // ~00:30: Karaoke nhảy sang bài Sơn Tùng của Rạp phim). Hàng đợi live
     // (roomState.queue) được tính để video do người xem tự thêm vẫn khớp.
-    const r = ROOMS[roomId];
+    const r = activeRoom;
     const liveQueue = roomState.queue || [];
     const belongs = r && (cur.id === r.nowPlaying.id
       || r.queue.some((q) => q.id === cur.id)
@@ -218,7 +283,9 @@ export default function App() {
   };
 
   const claimMission = (id, exp) => {
-    if (id === 'watch') return; // xem tự cộng, không bấm nhận
+    // Nhiệm vụ "xem" tự cộng +1 EXP/3 phút, không bấm nhận (N-04) — trả
+    // 'auto' để UI hiển thị trạng thái ("đang tự cộng…") thay vì im lặng.
+    if (id === 'watch') return 'auto';
     if (expState.missions[id]) return;
     if (id === 'chat' && !expState.chatReady) return;
     setExpState((s) => ({ ...s, exp: s.exp + exp, missions: { ...s.missions, [id]: true } }));
@@ -234,9 +301,13 @@ export default function App() {
   };
 
   // Vào phòng riêng: phòng riêng chỉ khác phòng thường ở nguồn state — dựng
-  // 1 định nghĩa phòng từ loại đã chọn (phim/troi) rồi đăng ký vào ROOMS để
-  // useRoom/RoomView tái dùng như phòng thường (botCount 0: chỉ người có
-  // link mới vào, không có bot lấp ghế).
+  // 1 định nghĩa phòng từ loại đã chọn (phim/troi) rồi giữ trong state riêng
+  // privateRoomDefs (S-02: KHÔNG ghi vào ROOMS — ghi vào ROOMS làm phòng
+  // riêng hiện ở sảnh công khai, Lobby bấm vào là vào thẳng không mật khẩu).
+  // useRoom/RoomView tái dùng định nghĩa này như phòng thường (botCount 0:
+  // chỉ người có link mới vào, không có bot lấp ghế). Mọi đường vào phòng
+  // riêng (màn Phòng riêng, deep link ?phong=) đều qua đây nên đều hỏi mật
+  // khẩu; Lobby chỉ nhận setRoomId cho phòng công khai trong ROOMS.
   const enterPrivateRoom = useCallback((room) => {
     if (room.type === 'karaoke') {
       window.alert('Phòng riêng Karaoke đang khóa — chỉ dành cho người đã ủng hộ.');
@@ -251,7 +322,7 @@ export default function App() {
     }
     const base = ROOMS[room.type];
     if (!base) return;
-    ROOMS[room.id] = {
+    const def = {
       id: room.id,
       name: room.name,
       sub: 'PHÒNG RIÊNG · LINK-ONLY',
@@ -267,6 +338,8 @@ export default function App() {
       nowPlaying: { ...base.nowPlaying },
       queue: base.queue.map((q) => ({ ...q })),
     };
+    // Giữ nguyên def đã có (định danh ổn định cho useRoom) khi vào lại.
+    setPrivateRoomDefs((prev) => (prev[room.id] ? prev : { ...prev, [room.id]: def }));
     setShowPrivate(false);
     setRoomId(room.id);
     try { window.history.replaceState(null, '', `${window.location.pathname}?phong=${room.id}`); } catch { /* ignore */ }
@@ -296,7 +369,11 @@ export default function App() {
 
   if (!guest) return <GuestSetup onEnter={enterGuest} />;
   if (showAdmin) {
-    return <AdminPanel guest={guest} onBack={() => setShowAdmin(false)} />;
+    return (
+      <Suspense fallback={<div style={{ padding: 40, color: '#9aa5b1' }}>Đang tải bảng quản trị…</div>}>
+        <AdminPanel guest={guest} onBack={() => setShowAdmin(false)} />
+      </Suspense>
+    );
   }
   if (showPrivate) {
     return (

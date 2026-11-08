@@ -4,12 +4,13 @@
 // Cinema3D — iframe YouTube không làm texture WebGL được).
 // File mới, tự chứa: không import gì từ Cinema3D.jsx (chỉ copy đúng shape
 // prop của LiveScreen bên đó). Parent nối vào qua karaoke-room-spec.js.
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { seatId } from '../data';
 import YouTubePlayer from '../youtube';
+import { PleatedCurtain, Rig, ScreenFace } from './shared3d';
 
 // 4 góc camera như các phòng khác: toàn cảnh, từ ghế, tập trung màn hình,
 // từ màn chiếu về hàng ghế. Màn hình ở z = -8 nên góc ngược phải đứng TRƯỚC
@@ -21,20 +22,7 @@ export const KARAOKE_CAMERA_PRESETS = {
   reverse: { label: 'Từ màn chiếu về hàng ghế', pos: [0, 2.6, -5.5], look: [0, 1.0, 10] },
 };
 
-// Đổi góc camera: đặt thẳng vị trí + hướng nhìn khi đổi preset (không lerp),
-// canvas không bao giờ bị unmount/thay thế khi đổi góc.
-function Rig({ preset, reAim }) {
-  const camera = useThree((s) => s.camera);
-  useEffect(() => {
-    const p = KARAOKE_CAMERA_PRESETS[preset];
-    camera.position.set(p.pos[0], p.pos[1], p.pos[2]);
-    camera.lookAt(p.look[0], p.look[1], p.look[2]);
-    camera.updateProjectionMatrix();
-    // reAim đổi mỗi lần bấm nút góc (kể cả bấm lại góc đang chọn) hoặc ngồi
-    // xuống ghế sau khi đi lại (fix 07/11 ~00:30 — xem Cinema3D.jsx).
-  }, [preset, camera, reAim]);
-  return null;
-}
+// Rig / ScreenFace / PleatedCurtain dùng chung ở ./shared3d (N-09).
 
 // Vẽ chữ lên canvas để dán làm biển/bảng (không fetch ảnh ngoài).
 function makeTextTexture({ w = 1024, h = 128, text, sub = '', bg = '#1a0505', fg = '#ffd75e', font = 64 }) {
@@ -56,36 +44,7 @@ function makeTextTexture({ w = 1024, h = 128, text, sub = '', bg = '#1a0505', fg
   return tex;
 }
 
-// Màn hình: thumbnail bài đang hát làm lớp nền dưới iframe live.
-function ScreenFace({ videoId, width, height }) {
-  const [texture, setTexture] = useState(null);
-  useEffect(() => {
-    let alive = true;
-    const loader = new THREE.TextureLoader();
-    loader.setCrossOrigin('anonymous');
-    loader.load(
-      `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-      (tex) => { if (alive) setTexture(tex); },
-      undefined,
-      () => { if (alive) setTexture(null); },
-    );
-    return () => { alive = false; };
-  }, [videoId]);
-  if (!texture) {
-    return (
-      <mesh position={[0, 3, -8]}>
-        <planeGeometry args={[width, height]} />
-        <meshStandardMaterial color="#0b0b0b" emissive="#9db8ff" emissiveIntensity={0.55} />
-      </mesh>
-    );
-  }
-  return (
-    <mesh position={[0, 3, -8]}>
-      <planeGeometry args={[width, height]} />
-      <meshBasicMaterial map={texture} toneMapped={false} />
-    </mesh>
-  );
-}
+// (ScreenFace dùng chung ở ./shared3d — N-09.)
 
 // Màn hình LIVE: cùng shape prop với LiveScreen trong Cinema3D.jsx —
 // videoId, onEnded, onPlayerReady, controls, startSeconds, width, height.
@@ -102,23 +61,7 @@ function LiveScreen({ videoId, onEnded, onPlayerReady, controls, startSeconds, w
   );
 }
 
-// Rèm nhung đỏ xếp ly (2 tông đỏ xen kẽ), như rạp phim.
-function PleatedCurtain({ position, width, height, vertical = true }) {
-  const pleats = [];
-  const count = vertical ? Math.max(3, Math.round(width / 0.35)) : Math.max(3, Math.round(height / 0.35));
-  for (let i = 0; i < count; i++) {
-    const t = count === 1 ? 0 : i / (count - 1);
-    const shade = i % 2 === 0 ? '#a01f1f' : '#701414';
-    const offset = (i % 2 === 0 ? 0.09 : -0.09);
-    pleats.push(
-      <mesh key={i} position={vertical ? [(t - 0.5) * width, 0, offset] : [0, (t - 0.5) * height, offset]} rotation={[0, (i % 2 === 0 ? 0.18 : -0.18), 0]}>
-        <boxGeometry args={vertical ? [0.32, height, 0.22] : [width, 0.32, 0.22]} />
-        <meshStandardMaterial color={shade} roughness={0.9} />
-      </mesh>
-    );
-  }
-  return <group position={position}>{pleats}</group>;
-}
+// (PleatedCurtain dùng chung ở ./shared3d — N-09.)
 
 // Chân mic + mic trên sân khấu (ca sĩ đứng hát ở đây).
 function MicStand({ position }) {
@@ -194,6 +137,9 @@ function ScoreBoard({ singerName, averageScore, scorerCount }) {
       bg: '#1a0505', fg: '#ffd75e', font: 64,
     });
   }, [singerName, averageScore, scorerCount]);
+  // N-02: texture điểm đổi theo ca sĩ/điểm — dispose texture cũ khi tex
+  // đổi hoặc unmount, nếu không mỗi lần chấm điểm rò 1 CanvasTexture.
+  useEffect(() => () => { if (tex) tex.dispose(); }, [tex]);
   if (!tex) return null;
   return (
     <mesh position={[0, 5.9, -7.9]}>
@@ -212,6 +158,14 @@ function Stage({ room, seats, mySeat, guest, videoId, showLive, onEnded, onPlaye
     w: 1024, h: 96, text: 'KARAOKE  •  19:00 – 23:00', sub: '',
     bg: '#0d0d0d', fg: '#ffffff', font: 44,
   }), []);
+  // N-02: dispose 2 texture biển hiệu khi unmount (cùng lỗi như ScoreBoard).
+  useEffect(() => () => { gotTalentTex.dispose(); hoursTex.dispose(); }, [gotTalentTex, hoursTex]);
+  // frameloop="demand" (M-03, pattern Arena3D): R3F không tự vẽ khi props
+  // đổi; bot đổi ghế, đổi bài, đổi ca sĩ/điểm, bật/tắt tên/live phải gọi
+  // invalidate() để vẽ lại 1 frame. Rig lo invalidate khi đổi góc,
+  // ScreenFace lo khi thumbnail về.
+  const invalidate = useThree((s) => s.invalidate);
+  useEffect(() => { invalidate(); }, [seats, videoId, showLive, showNames, singerName, averageScore, scorerCount, invalidate]);
   const seatMeshes = [];
   // 30 ghế đỏ: 3 hàng A/B/C × 10 ghế, hướng về sân khấu (-z).
   room.rows.forEach((row, ri) => {
@@ -281,7 +235,7 @@ function Stage({ room, seats, mySeat, guest, videoId, showLive, onEnded, onPlaye
         <boxGeometry args={[8.6, 5.1, 0.15]} />
         <meshStandardMaterial color="#1a1a1a" />
       </mesh>
-      <ScreenFace videoId={videoId} width={8} height={4.5} />
+      <ScreenFace videoId={videoId} width={8} height={4.5} position={[0, 3, -8]} />
       {showLive && (
         <LiveScreen videoId={videoId} onEnded={onEnded} onPlayerReady={onPlayerReady}
           controls={controls} startSeconds={startSeconds} width={8} height={4.5} />
@@ -319,9 +273,9 @@ export default function Karaoke3D({ room, seats, mySeat, guest, cameraPreset, vi
   // phình to che hết khung hình (fix 07/11 ~00:30, giống Cinema3D/Arena3D).
   const showNames = cameraPreset === 'overview' || cameraPreset === 'screen';
   return (
-    <Canvas camera={{ position: KARAOKE_CAMERA_PRESETS[cameraPreset].pos, fov: 55 }}>
+    <Canvas frameloop="demand" camera={{ position: KARAOKE_CAMERA_PRESETS[cameraPreset].pos, fov: 55 }}>
       <color attach="background" args={['#0a0505']} />
-      <Rig preset={cameraPreset} reAim={reAim} />
+      <Rig presets={KARAOKE_CAMERA_PRESETS} preset={cameraPreset} reAim={reAim} />
       <Stage room={room} seats={seats} mySeat={mySeat} guest={guest} videoId={videoId}
         showLive={showLive} onEnded={onEnded} onPlayerReady={onPlayerReady}
         controls={controls} startSeconds={startSeconds} showNames={showNames}

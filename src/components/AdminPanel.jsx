@@ -143,6 +143,10 @@ export default function AdminPanel({ guest, onBack }) {
   const [commentTest, setCommentTest] = useState({ tone: 'idle', text: '' });
   const testUtterRef = useRef(null); // utterance đọc thử đang chạy
   const testTimerRef = useRef(null); // watchdog nếu trình duyệt nuốt lệnh đọc
+  // Timer nghe thử nhạc 6s (M-07): phải lưu vào ref để hủy được — trước đây
+  // setTimeout không lưu, bấm "Phát Trên Live" trong 6s thì timer cũ vẫn
+  // stop() nhạc live vừa bật.
+  const previewTimerRef = useRef(null);
   const testTokenRef = useRef(0); // chống lần bấm cũ chạy sau lần bấm mới
   const testActiveRef = useRef(false); // đang có bài đọc thử chạy (kể cả đang chờ 150ms sau cancel)
   const testStartTimerRef = useRef(null); // timer chờ 150ms sau cancel() rồi mới đọc
@@ -178,6 +182,9 @@ export default function AdminPanel({ guest, onBack }) {
     testActiveRef.current = false;
     if (testTimerRef.current) clearTimeout(testTimerRef.current);
     if (testStartTimerRef.current) clearTimeout(testStartTimerRef.current);
+    // Hủy timer nghe thử đang chờ (M-07) — không thì rời panel rồi nó vẫn
+    // stop() nhạc đang phát.
+    if (previewTimerRef.current) { clearTimeout(previewTimerRef.current); previewTimerRef.current = null; }
     testUtterRef.current = null;
     try { window.speechSynthesis?.cancel(); } catch { /* ignore */ }
   }, []);
@@ -505,6 +512,9 @@ export default function AdminPanel({ guest, onBack }) {
 
   const toggleMusic = (on) => {
     if (on) {
+      // Hủy timer nghe thử còn chờ (M-07): không thì nó stop() nhạc live
+      // vừa bật sau 6s.
+      if (previewTimerRef.current) { clearTimeout(previewTimerRef.current); previewTimerRef.current = null; }
       if (music.fileUrl && audioRef.current) {
         audioRef.current.play().catch(() => {});
       } else {
@@ -521,13 +531,15 @@ export default function AdminPanel({ guest, onBack }) {
   };
 
   const previewMusic = () => {
+    // Bấm nghe thử lại thì đếm lại 6s từ đầu, không để 2 timer cùng chạy.
+    if (previewTimerRef.current) { clearTimeout(previewTimerRef.current); previewTimerRef.current = null; }
     if (music.fileUrl && audioRef.current) {
       audioRef.current.currentTime = 0;
       audioRef.current.play().catch(() => {});
-      setTimeout(() => audioRef.current?.pause(), 6000);
+      previewTimerRef.current = setTimeout(() => { audioRef.current?.pause(); previewTimerRef.current = null; }, 6000);
     } else {
       ambient.start(music.track, config.musicVolume);
-      setTimeout(() => ambient.stop(), 6000);
+      previewTimerRef.current = setTimeout(() => { ambient.stop(); previewTimerRef.current = null; }, 6000);
     }
     log('Nghe thử nhạc 6 giây');
   };

@@ -1,18 +1,6 @@
 import { ROOMS, LV_EXP } from '../data';
-import { KARAOKE_RULES } from '../karaoke-room-spec';
 import { SANH_SPEC } from '../sanh-spec';
-
-// Karaoke mở 19:00–23:00 giờ VN (theo bản gốc). Ngoài giờ vẫn vào xem thử
-// được, chỉ hiện ghi chú — xem RoomView.jsx.
-function karaokeOpenNow() {
-  try {
-    const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
-    const h = now.getHours();
-    const open = parseInt(KARAOKE_RULES.openHours.open, 10);
-    const close = parseInt(KARAOKE_RULES.openHours.close, 10);
-    return h >= open && h < close;
-  } catch { return true; }
-}
+import { karaokeOpenNow } from '../utils';
 
 export default function Lobby({ guest, exp, nowPlayingByRoom, onEnterRoom, onOpenPrivateRooms, onOpenAdmin, onLeave }) {
   const level = Math.floor(exp / LV_EXP) + 1;

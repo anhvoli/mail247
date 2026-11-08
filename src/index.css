@@ -59,7 +59,6 @@ a { color: var(--lime); }
 .room-card h2 { margin: 0 0 6px; }
 .room-card p { color: var(--muted); margin: 4px 0; }
 .room-card .count { color: var(--lime); font-weight: 700; }
-.phase2 { opacity: .65; }
 .tag { display: inline-block; background: #2a2f1c; color: var(--lime); border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 700; }
 .exp-bar { height: 8px; background: #0f141b; border-radius: 999px; overflow: hidden; margin-top: 6px; }
 .exp-bar > div { height: 100%; background: var(--lime); }
@@ -104,7 +103,6 @@ a { color: var(--lime); }
 .nametag { background: #000000b3; color: #e8f5d0; border: 1px solid #b8cd8e66; padding: 2px 8px;
   border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap; }
 .chip.live { color: var(--lime-bright); border-color: var(--lime); }
-.focus-exit { position: absolute; top: 10px; right: 10px; z-index: 7; background: #000c; color: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; font-size: 12px; }
 .controls { display: flex; gap: 8px; padding: 10px 12px; flex-wrap: wrap; align-items: center; border-bottom: 1px solid var(--line); position: relative; z-index: 10; background: #0d1117; }
 .controls .cam-btns { display: flex; gap: 6px; }
 .controls button, .chip-btn { background: var(--panel2); border: 1px solid var(--line); color: var(--text); border-radius: 8px; padding: 7px 11px; }
@@ -346,19 +344,17 @@ html, body { overflow-x: clip; }
    .view3d cao cố định 300px nên khung 3D vẫn nhỏ, dưới còn khoảng đen lớn
    (sơ đồ ghế + các hàng dưới khung). Ở chế độ fullscreen: .stage lấp đầy
    màn hình, .view3d chiếm hết chiều cao còn lại, ẩn sơ đồ ghế / hàng điệu
-   bộ / toast; thanh điều khiển giữ lại ở dưới để còn nút "Thoát toàn màn
+   bộ; toast GIỮ LẠI để thấy được dòng giải thích (M-05); thanh điều khiển
    hình" (Esc cũng thoát được). R3F tự vẽ lại 1 frame khi container đổi
    kích thước (store subscribe → invalidate) nên không cần chạm JS.
    Đặt cuối file để thắng cả rule height trong media query mobile. */
 .stage:fullscreen { width: 100vw; height: 100vh; height: 100dvh; border: 0; border-radius: 0; background: #000; }
 .stage:fullscreen .view3d { flex: 1 1 auto; height: auto; min-height: 0; border-bottom: 0; }
 .stage:fullscreen .gesture-row,
-.stage:fullscreen .toast,
 .stage:fullscreen .seatmap { display: none; }
 .stage:-webkit-full-screen { width: 100vw; height: 100vh; height: 100dvh; border: 0; border-radius: 0; background: #000; }
 .stage:-webkit-full-screen .view3d { flex: 1 1 auto; height: auto; min-height: 0; border-bottom: 0; }
 .stage:-webkit-full-screen .gesture-row,
-.stage:-webkit-full-screen .toast,
 .stage:-webkit-full-screen .seatmap { display: none; }
 
 /* Chế độ phóng to dự phòng bằng CSS (vòng 2, bug 2): khi requestFullscreen
@@ -368,8 +364,21 @@ html, body { overflow-x: clip; }
 .stage.fs-fallback { position: fixed; inset: 0; z-index: 9999; width: 100vw; height: 100vh; height: 100dvh; border: 0; border-radius: 0; background: #000; overflow-y: auto; }
 .stage.fs-fallback .view3d { flex: 1 1 auto; height: auto; min-height: 0; border-bottom: 0; }
 .stage.fs-fallback .gesture-row,
-.stage.fs-fallback .toast,
 .stage.fs-fallback .seatmap { display: none; }
+
+/* M-05: toast giải thích fullscreen trước đây bị display:none trong cả
+   :fullscreen lẫn .fs-fallback nên người xem không bao giờ thấy. Nay bỏ
+   .toast khỏi danh sách ẩn và cho nổi trên nền đen (fixed, giữa-dưới,
+   z-index cao hơn cả .stage fallback); toast rỗng thì ẩn để không hiện
+   pill trống. */
+.stage:fullscreen .toast,
+.stage:-webkit-full-screen .toast,
+.stage.fs-fallback .toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
+  z-index: 10000; background: rgba(0,0,0,.85); color: var(--lime); border: 1px solid var(--line);
+  border-radius: 999px; padding: 8px 16px; max-width: min(560px, 90vw); min-height: 0; }
+.stage:fullscreen .toast:empty,
+.stage:-webkit-full-screen .toast:empty,
+.stage.fs-fallback .toast:empty { display: none; }
 
 /* Trình phát nền giữ video chạy ở góc ghế/ngược (vòng 2, bug 1): iframe thật
    320×180 nhưng đẩy ra ngoài màn hình để không ai thấy/không bấm nhầm;

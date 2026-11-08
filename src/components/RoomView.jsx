@@ -8,22 +8,11 @@ import YouTubePlayer from '../youtube';
 import { EMOJI_GROUPS, GESTURES, MISSIONS } from '../data';
 import { KARAOKE_RULES } from '../karaoke-room-spec';
 import { getCameraPreset, subscribeCameraPreset } from '../adminCamera';
-
-// Karaoke mở 19:00–23:00 giờ VN (theo bản gốc). Ngoài giờ vẫn vào xem thử
-// được, chỉ hiện ghi chú — không chặn cửa.
-function karaokeOpenNow() {
-  try {
-    const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
-    const h = now.getHours();
-    const open = parseInt(KARAOKE_RULES.openHours.open, 10);
-    const close = parseInt(KARAOKE_RULES.openHours.close, 10);
-    return h >= open && h < close;
-  } catch { return true; }
-}
-
-function fmtTime(d) {
-  return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-}
+// N-09: playheadCache / karaokeOpenNow / fmtTime dùng chung từ module riêng
+// (trước đây RoomView định nghĩa local trùng với Lobby/utils) — giữ nguyên
+// hành vi, chỉ đổi chỗ chứa.
+import { playheadCache } from '../playheadCache';
+import { karaokeOpenNow, fmtTime } from '../utils';
 
 function fmtClock(s) {
   s = Math.max(0, Math.floor(s || 0));
@@ -35,12 +24,9 @@ function parseDuration(str) {
   return m ? (+m[1]) * 60 + (+m[2]) : 0;
 }
 
-// Vị trí phát gần nhất của từng phòng (giờ + thời lượng + id bài, key =
-// room.id) — SỐNG Ở CẤP MODULE để còn qua lần RoomView unmount khi rời
-// phòng (ref trong component mất theo unmount). Poll player mỗi giây ghi
-// vào đây; vào lại phòng thì khối reset playhead + effect đồng hồ của
-// panel đọc lại từ đây để hiện đúng giờ đang chạy thay vì 0:00/0:00.
-const playheadCache = {};
+// Vị trí phát gần nhất của từng phòng — xem src/playheadCache.js (N-09:
+// trước đây object này định nghĩa local ngay tại đây; nay import dùng chung
+// để Sảnh cũng đọc được vị trí phát của Rạp phim).
 
 // Panel "TRÊN MÀN ẢNH" như bản gốc (đè lên góc trái khung 3D): tên bài, người
 // đề xuất, thời gian hiện tại / tổng thời lượng, thanh tiến trình, vote bỏ qua
@@ -93,7 +79,7 @@ const NowPlayingPanel = memo(function NowPlayingPanel({ current, queue, playhead
       <button className="np-collapse" onClick={() => setOpen(false)} title="Thu gọn panel" aria-label="Thu gọn panel">✕</button>
       <div className="kicker">Trên màn ảnh</div>
       <div className="title">{current.title}</div>
-      <div className="meta">{suggester} đề xuất · {fmtClock(time.cur)} / {fmtClock(dur)}</div>
+      <div className="meta">{suggester} đề xuất · {fmtClock(time.cur)} / {dur > 0 ? fmtClock(dur) : '—:—'}</div>
       <div className="progress"><div style={{ width: `${pct}%` }} /></div>
       <button className="skip-btn" disabled={skipVoted} onClick={onVoteSkip}>
         ▶ Vote bỏ qua {skipCount}/{skipThreshold}
@@ -338,9 +324,14 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
     <SeatMap room={room} seats={seats} mySeat={mySeat} onPick={pickSeat} />
   ), [room, seats, mySeat, pickSeat]);
 
+  // N-05: giữ timer xóa toast để clear trước mỗi lần đặt mới — trước đây
+  // toast mới (vd vote bỏ qua, 5s) có thể bị timer của toast cũ xóa sau
+  // 1–2 giây. Mẫu theo testTimerRef trong AdminPanel.
+  const toastTimerRef = useRef(null);
   const showToast = (text, ms = 3500) => {
     setToast(text);
-    setTimeout(() => setToast(''), ms);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => { setToast(''); toastTimerRef.current = null; }, ms);
   };
 
   // Chấm điểm ca sĩ đang hát (1–10, mỗi người chấm 1 lần / tiết mục).
@@ -351,22 +342,25 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
     showToast(`Bạn chấm ${singerName}: ${n}/10 — cảm ơn bạn!`);
   };
 
-  // "Mời xuống": cần 50% người xem đồng ý, tối thiểu 3 người (luật phòng
-  // Karaoke — xem KARAOKE_RULES). Đủ ngưỡng thì chuyển sang ca sĩ tiếp theo.
+  // "Mời xuống": cần 50% người xem đồng ý (luật phòng Karaoke — xem
+  // KARAOKE_RULES). Ngưỡng tính theo realCount (người thật) như vote bỏ
+  // qua — trước đây tính theo occupiedCount (cả bot: 20 bot + 1 người =
+  // 21 → ngưỡng 11) nên 1 người thật bấm mãi không bao giờ đủ. Với
+  // realCount = 1 thì ngưỡng là 1. Đủ ngưỡng thì chuyển sang ca sĩ tiếp theo.
   const doInviteDown = () => {
     if (inviteDownVoted) return;
     setInviteDownVoted(true);
     const n = inviteDownCount + 1;
     setInviteDownCount(n);
     const threshold = Math.max(
-      KARAOKE_RULES.inviteDown.minVoters,
-      Math.ceil((occupiedCount * KARAOKE_RULES.inviteDown.percent) / 100),
+      1,
+      Math.ceil((realCount * KARAOKE_RULES.inviteDown.percent) / 100),
     );
     if (n >= threshold) {
       showToast(`Cả rạp đã mời ${singerName} xuống — tới lượt ca sĩ tiếp theo!`);
       advanceToNext('skip');
     } else {
-      showToast(`Đã bấm Mời xuống (${n}/${threshold}) — cần 50% người xem (tối thiểu 3 người).`);
+      showToast(`Đã bấm Mời xuống (${n}/${threshold}) — cần 50% người thật đồng ý.`);
     }
   };
 
@@ -377,8 +371,7 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
     // Hiện rõ 1/1 ngay khi vote: round 1 chờ có 600ms là đổi bài
     // và reset counter về 0/1, nên người bấm không bao giờ thấy
     // vote của mình được ghi (nay chờ 5 giây mới chuyển bài).
-    setToast(`Đã ghi nhận vote bỏ qua (${skipThreshold}/${skipThreshold}) — chuyển bài sau 5 giây…`);
-    setTimeout(() => setToast(''), 5000);
+    showToast(`Đã ghi nhận vote bỏ qua (${skipThreshold}/${skipThreshold}) — chuyển bài sau 5 giây…`, 5000);
   }, [voteSkip, skipThreshold]);
 
   // Escape thoát toàn màn hình (kể cả khi đang ở góc "Tập trung màn hình")
@@ -440,8 +433,7 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
 
   const doGesture = (g) => {
     setGesture(g.id);
-    setToast(`${guest.name} ${g.id === 'dance' ? 'đang nhún nhảy' : g.id === 'wave' ? 'đang vẫy tay' : 'đang vỗ tay'} — cả rạp cùng làm nào!`);
-    setTimeout(() => setToast(''), 3500);
+    showToast(`${guest.name} ${g.id === 'dance' ? 'đang nhún nhảy' : g.id === 'wave' ? 'đang vẫy tay' : 'đang vỗ tay'} — cả rạp cùng làm nào!`);
   };
 
   const submitQueue = () => {
@@ -453,14 +445,17 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
     }
     const res = addToQueue(queueUrl.trim());
     if (res === true) {
-      setToast('Đã thêm video vào hàng đợi — cả rạp cùng bình chọn nhé.');
+      showToast('Đã thêm video vào hàng đợi — cả rạp cùng bình chọn nhé.', 4000);
       setQueueUrl('');
     } else if (res === 'duplicate') {
-      setToast('Video này đã có trong hàng đợi (hoặc đang chiếu) rồi.');
+      showToast('Video này đã có trong hàng đợi (hoặc đang chiếu) rồi.', 4000);
+    } else if (res === 'cooldown') {
+      // M-04 (phần UI): useRoom trả 'cooldown' khi ca sĩ chưa đủ 3 người
+      // khác hát xen giữa — báo rõ thay vì rơi vào nhánh "link sai".
+      showToast('Bạn phải chờ 3 ca sĩ khác hát xong mới đăng ký lại.', 4000);
     } else {
-      setToast('Link chưa đúng — dán link YouTube dạng watch?v=... hoặc youtu.be/...');
+      showToast('Link chưa đúng — dán link YouTube dạng watch?v=... hoặc youtu.be/...', 4000);
     }
-    setTimeout(() => setToast(''), 4000);
   };
 
   return (
@@ -476,7 +471,7 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
       </div>
 
       <div className="main">
-        <div className={`stage ${camera === 'screen' ? 'focus-screen' : ''} ${fsFallback ? 'fs-fallback' : ''}`} ref={stageRef}>
+        <div className={`stage ${fsFallback ? 'fs-fallback' : ''}`} ref={stageRef}>
           <div className="view3d">
             {/* Cảnh 3D đã memo (biến `scene` ở trên): RoomView render lại vì
                 gõ chat / đổi tab / vote / toast cũng không render lại Canvas.
@@ -570,7 +565,7 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
                     {inviteDownVoted ? 'Đã bấm Mời xuống ✓' : '⬇ Mời ca sĩ xuống'}
                   </button>
                   <div style={{ fontSize: 12, color: '#9aa5b1', marginTop: 4 }}>
-                    Cần 50% người xem đồng ý (tối thiểu 3 người) · Hát xong chờ 3 ca sĩ khác mới đăng ký lại.
+                    Cần 50% người thật đồng ý · Hát xong chờ 3 ca sĩ khác mới đăng ký lại.
                   </div>
                 </div>
               )}
@@ -581,8 +576,13 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
                     <div className="t">{item.title}</div>
                     <div className="m">{item.by} · {item.duration} · {item.byGuest} đề xuất{item.id === current.id ? ' · ĐANG CHIẾU' : ''}</div>
                   </div>
-                  <button className={`vote-btn ${voted.has(item.id) ? 'voted' : ''}`} disabled={voted.has(item.id) || item.id === current.id}
-                    onClick={() => vote(item.id)}>▲ {item.votes}</button>
+                  {/* M-04: Karaoke chạy theo lượt đăng ký FIFO, không theo vote
+                      nên ẩn nút vote ở tab này (chỉ rạp phim / đấu trường
+                      mới xếp bài tiếp theo theo vote). */}
+                  {!isKaraoke && (
+                    <button className={`vote-btn ${voted.has(item.id) ? 'voted' : ''}`} disabled={voted.has(item.id) || item.id === current.id}
+                      onClick={() => vote(item.id)}>▲ {item.votes}</button>
+                  )}
                 </div>
               ))}
               <div className="add-queue">
@@ -643,10 +643,17 @@ export default function RoomView({ guest, roomState, onLeave, exp, missionsDone,
                   <div key={m.id} className={`mission ${done ? 'done' : ''}`}>
                     <div className="row">
                       <div><b>{m.label}</b> · +{m.exp} EXP<br /><small>{m.hint}</small></div>
-                      <button className="btn" disabled={done || (m.id === 'chat' && !missionsDone.chatReady)}
-                        onClick={() => onMissionDone(m.id, m.exp)}>
-                        {done ? 'Đã nhận ✓' : 'Nhận'}
-                      </button>
+                      {/* N-04: nhiệm vụ watch tự cộng EXP, bấm "Nhận" không
+                          làm gì (claimMission return ngay) nên ẩn nút, chỉ
+                          hiện dòng trạng thái. */}
+                      {m.id === 'watch' && !done ? (
+                        <small style={{ color: '#9aa5b1', textAlign: 'right' }}>đang tự cộng +1 EXP/3 phút</small>
+                      ) : (
+                        <button className="btn" disabled={done || (m.id === 'chat' && !missionsDone.chatReady)}
+                          onClick={() => onMissionDone(m.id, m.exp)}>
+                          {done ? 'Đã nhận ✓' : 'Nhận'}
+                        </button>
+                      )}
                     </div>
                     {m.id === 'chat' && !missionsDone.chatReady && !done && (
                       <small>Gửi 1 tin nhắn trong tab Trò chuyện để mở khóa.</small>
