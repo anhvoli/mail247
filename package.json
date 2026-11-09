@@ -1,18 +1,22 @@
 {
-  "name": "work-report-service",
+  "name": "work-report-portal",
+  "private": true,
   "version": "1.0.0",
-  "description": "Hệ thống báo cáo công việc cho nhân viên và Dashboard quản trị viên (No-DB, Standalone, Chart.js, Feedback)",
-  "main": "server.js",
+  "type": "module",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
   },
-  "keywords": [
-    "work-report",
-    "dashboard",
-    "performance-charts",
-    "rest-api"
-  ],
-  "author": "",
-  "license": "ISC"
+  "dependencies": {
+    "chart.js": "^4.4.7",
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-chartjs-2": "^5.2.0",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^5.4.11"
+  }
 }

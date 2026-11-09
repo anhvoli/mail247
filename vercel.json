@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "rewrites": [
+    {
+      "source": "/api/reports/:id/feedback",
+      "destination": "/api/reports?id=:id&feedback=true"
+    },
+    {
+      "source": "/api/reports/:id",
+      "destination": "/api/reports?id=:id"
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
