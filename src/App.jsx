@@ -3,13 +3,14 @@ import {
   BarChart3, 
   FileText, 
   Send, 
-  CheckCircle, 
+  CheckCircle2, 
   Clock, 
   Users, 
   MessageSquare,
-  ShieldCheck,
   TrendingUp,
-  LayoutDashboard
+  LayoutDashboard,
+  Sparkles,
+  Zap
 } from 'lucide-react';
 import { loadReports, saveReports } from './mockData';
 import PerformanceCharts from './components/PerformanceCharts';
@@ -56,6 +57,7 @@ export default function App() {
   // Tính toán thống kê
   const totalReports = reports.length;
   const completedCount = reports.filter(r => r.status === 'COMPLETED').length;
+  const inProgressCount = reports.filter(r => r.status === 'IN_PROGRESS').length;
   const avgCompletion = totalReports > 0
     ? Math.round(reports.reduce((acc, r) => acc + (r.completionRate || 0), 0) / totalReports)
     : 0;
@@ -69,11 +71,14 @@ export default function App() {
         <div className="navbar-inner">
           <div className="brand-section">
             <div className="brand-logo">
-              <BarChart3 size={22} />
+              <Zap size={22} fill="white" />
             </div>
             <div>
-              <div className="brand-title">WorkReport Portal</div>
-              <div className="brand-subtitle">Hệ thống báo cáo & Giám sát hiệu suất công việc</div>
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <span className="brand-title">WorkReport Pro</span>
+                <span className="brand-badge">2026 Edition</span>
+              </div>
+              <div className="brand-subtitle">Hệ thống báo cáo & Giám sát hiệu suất công việc thông minh</div>
             </div>
           </div>
 
@@ -103,50 +108,65 @@ export default function App() {
       {/* Main Content Area */}
       <main className="main-content">
         {activeTab === 'dashboard' && (
-          <div>
+          <div className="animate-fade-in">
+            {/* Hero Welcome Banner */}
+            <div className="hero-banner">
+              <div className="hero-content">
+                <div className="hero-tag">
+                  <Sparkles size={13} /> Trung tâm điều hành công việc
+                </div>
+                <h1 className="hero-title">
+                  Theo Dõi Tiến Độ & Hiệu Suất Thời Gian Thực
+                </h1>
+                <p className="hero-desc">
+                  Tổng hợp báo cáo tức thì từ các phòng ban, trực quan hóa năng suất lao động bằng biểu đồ và cho phép lãnh đạo tương tác chỉ đạo trực tiếp.
+                </p>
+              </div>
+            </div>
+
             {/* Stat Cards */}
             <div className="stats-grid">
               <div className="card stat-card">
-                <div className="stat-icon" style={{ background: '#dbeafe', color: '#1d4ed8' }}>
-                  <Users size={24} />
+                <div className="stat-icon" style={{ background: '#e0e7ff', color: '#4338ca' }}>
+                  <Users size={26} />
                 </div>
                 <div className="stat-info">
                   <span className="stat-label">Tổng số báo cáo</span>
                   <span className="stat-value">{totalReports}</span>
-                  <span className="stat-sub">{completedCount} công việc đã hoàn thành</span>
+                  <span className="stat-sub">{completedCount} việc đã hoàn thành · {inProgressCount} đang làm</span>
                 </div>
               </div>
 
               <div className="card stat-card">
-                <div className="stat-icon" style={{ background: '#dcfce7', color: '#15803d' }}>
-                  <TrendingUp size={24} />
+                <div className="stat-icon" style={{ background: '#dcfce7', color: '#059669' }}>
+                  <TrendingUp size={26} />
                 </div>
                 <div className="stat-info">
                   <span className="stat-label">Hiệu suất trung bình</span>
                   <span className="stat-value">{avgCompletion}%</span>
-                  <span className="stat-sub">Tiến độ tổng thể các bộ phận</span>
+                  <span className="stat-sub">Tiến độ tổng thể các phòng ban</span>
                 </div>
               </div>
 
               <div className="card stat-card">
-                <div className="stat-icon" style={{ background: '#fef3c7', color: '#b45309' }}>
-                  <Clock size={24} />
+                <div className="stat-icon" style={{ background: '#fef3c7', color: '#d97706' }}>
+                  <Clock size={26} />
                 </div>
                 <div className="stat-info">
                   <span className="stat-label">Tổng giờ làm việc</span>
                   <span className="stat-value">{totalHours}h</span>
-                  <span className="stat-sub">Ghi nhận trong kỳ báo cáo</span>
+                  <span className="stat-sub">Thời gian làm việc ghi nhận thực tế</span>
                 </div>
               </div>
 
               <div className="card stat-card">
-                <div className="stat-icon" style={{ background: '#f3e8ff', color: '#7e22ce' }}>
-                  <MessageSquare size={24} />
+                <div className="stat-icon" style={{ background: '#f3e8ff', color: '#7c3aed' }}>
+                  <MessageSquare size={26} />
                 </div>
                 <div className="stat-info">
                   <span className="stat-label">Nhận xét Admin</span>
                   <span className="stat-value">{totalFeedbacks}</span>
-                  <span className="stat-sub">Góp ý & chỉ đạo trực tiếp</span>
+                  <span className="stat-sub">Chỉ đạo & phản hồi trực tiếp</span>
                 </div>
               </div>
             </div>
@@ -160,23 +180,27 @@ export default function App() {
         )}
 
         {activeTab === 'submit' && (
-          <SubmitReport
-            onReportAdded={(rep) => {
-              handleReportAdded(rep);
-              setActiveTab('dashboard');
-            }}
-          />
+          <div className="animate-fade-in">
+            <SubmitReport
+              onReportAdded={(rep) => {
+                handleReportAdded(rep);
+                setActiveTab('dashboard');
+              }}
+            />
+          </div>
         )}
 
         {activeTab === 'documents' && (
-          <ApiDocuments />
+          <div className="animate-fade-in">
+            <ApiDocuments />
+          </div>
         )}
       </main>
 
       {/* Footer */}
       <footer className="footer">
         <div>
-          <strong>WorkReport Portal</strong> &copy; 2026 — Thiết kế tối ưu cho Vercel & React SPA. Không cần cấu hình database phức tạp.
+          <strong>WorkReport Pro</strong> &copy; 2026 — Thiết kế tối ưu cho Vercel & React Single Page Application.
         </div>
       </footer>
     </div>
