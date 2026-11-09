@@ -30,7 +30,7 @@ export default function SubmitReport({ onReportAdded }) {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (!employeeName.trim() || !title.trim()) {
@@ -60,7 +60,7 @@ export default function SubmitReport({ onReportAdded }) {
       feedbacks: []
     };
 
-    onReportAdded(newReport);
+    await onReportAdded(newReport);
     setSuccessMsg(true);
 
     // Reset form

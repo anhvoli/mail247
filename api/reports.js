@@ -1,62 +1,6 @@
-let reportsMemory = [
-  {
-    id: "REP-2026-001",
-    employeeName: "Nguyễn Văn An",
-    department: "Kỹ thuật / Backend",
-    title: "Tối ưu hóa API và tích hợp caching Redis",
-    tasksCompleted: [
-      "Refactor module tổng hợp báo cáo công việc",
-      "Sửa lỗi phân trang và lọc theo phòng ban",
-      "Thêm middleware xử lý lỗi tập trung"
-    ],
-    tasksInProgress: [
-      "Viết unit test cho endpoint nộp báo cáo (đạt 70%)"
-    ],
-    blockers: "Không có",
-    planTomorrow: "Hoàn thiện unit test và review code cùng team lead",
-    hoursWorked: 8,
-    completionRate: 95,
-    status: "COMPLETED",
-    createdAt: "2026-11-09T08:30:00.000Z",
-    feedbacks: [
-      {
-        id: "fb-1",
-        adminName: "Trần Trưởng Phòng",
-        comment: "Làm rất tốt em nhé, tốc độ xử lý API cải thiện rõ rệt!",
-        createdAt: "2026-11-09T10:15:00.000Z"
-      }
-    ]
-  },
-  {
-    id: "REP-2026-002",
-    employeeName: "Trần Thị Mai",
-    department: "Thiết kế UI/UX",
-    title: "Hoàn thiện wireframe và UI Dashboard",
-    tasksCompleted: [
-      "Thiết kế xong bộ UI Dashboard phong cách hiện đại",
-      "Thống nhất mã màu và icon system trên Figma"
-    ],
-    tasksInProgress: [
-      "Chỉnh sửa phiên bản responsive mobile"
-    ],
-    blockers: "Chờ duyệt bảng màu từ ban giám đốc",
-    planTomorrow: "Xuất file assets và bàn giao thông số cho đội Frontend",
-    hoursWorked: 7.5,
-    completionRate: 85,
-    status: "IN_PROGRESS",
-    createdAt: "2026-11-09T09:00:00.000Z",
-    feedbacks: [
-      {
-        id: "fb-2",
-        adminName: "Nguyễn Giám Đốc",
-        comment: "Giao diện nhìn chuyên nghiệp và thoáng đãng. Bảng màu đã duyệt nhé!",
-        createdAt: "2026-11-09T11:00:00.000Z"
-      }
-    ]
-  }
-];
+import { getReports, saveReports } from './db.js';
 
-export default function handler(req, res) {
+export default async function handler(req, res) {
   // CORS Headers
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -71,59 +15,92 @@ export default function handler(req, res) {
     return;
   }
 
-  if (req.method === 'GET') {
-    const { id } = req.query;
-    if (id) {
-      const found = reportsMemory.find(r => r.id === id);
-      if (found) {
-        return res.status(200).json(found);
+  try {
+    const reports = await getReports();
+
+    // 1. GET Request
+    if (req.method === 'GET') {
+      const { id } = req.query || {};
+      if (id) {
+        const found = reports.find(r => r.id === id);
+        if (found) {
+          return res.status(200).json(found);
+        }
+        return res.status(404).json({ error: `Không tìm thấy báo cáo với ID: ${id}` });
       }
-      return res.status(404).json({ error: "Không tìm thấy báo cáo với ID: " + id });
+      return res.status(200).json(reports);
     }
-    return res.status(200).json(reportsMemory);
-  }
 
-  if (req.method === 'POST') {
-    const { id, feedback } = req.query;
+    // 2. POST Request
+    if (req.method === 'POST') {
+      const { id, feedback } = req.query || {};
 
-    // POST /api/reports?id=...&feedback=true
-    if (id && feedback) {
-      const found = reportsMemory.find(r => r.id === id);
-      if (!found) {
-        return res.status(404).json({ error: "Không tìm thấy báo cáo để nhận xét" });
+      // Xử lý gửi feedback: POST /api/reports?id=REP-xxx&feedback=true
+      if (id && (feedback === 'true' || feedback === true)) {
+        const found = reports.find(r => r.id === id);
+        if (!found) {
+          return res.status(404).json({ error: `Không tìm thấy báo cáo ${id} để nhận xét` });
+        }
+
+        const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
+        const newFeedback = {
+          id: `fb-${Date.now()}`,
+          adminName: body.adminName?.trim() || "Quản trị viên",
+          comment: body.comment?.trim() || "",
+          createdAt: new Date().toISOString()
+        };
+
+        if (!newFeedback.comment) {
+          return res.status(400).json({ error: "Nội dung nhận xét không được để trống" });
+        }
+
+        found.feedbacks = found.feedbacks || [];
+        found.feedbacks.push(newFeedback);
+
+        await saveReports(reports);
+        return res.status(201).json({
+          success: true,
+          message: "Đã thêm nhận xét cho báo cáo thành công",
+          reportId: id,
+          feedback: newFeedback
+        });
       }
-      const newFeedback = {
-        id: `fb-${Date.now()}`,
-        adminName: req.body.adminName || "Quản trị viên",
-        comment: req.body.comment || "",
-        createdAt: new Date().toISOString()
+
+      // Xử lý gửi báo cáo mới: POST /api/reports
+      const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
+      
+      const newReport = {
+        id: body.id || `REP-${Date.now().toString().slice(-4)}`,
+        employeeName: body.employeeName?.trim() || "Nhân viên mới",
+        department: body.department || "Kỹ thuật",
+        title: body.title?.trim() || "Báo cáo công việc",
+        tasksCompleted: Array.isArray(body.tasksCompleted) ? body.tasksCompleted : (body.tasksCompleted ? [body.tasksCompleted] : []),
+        tasksInProgress: Array.isArray(body.tasksInProgress) ? body.tasksInProgress : (body.tasksInProgress ? [body.tasksInProgress] : []),
+        blockers: body.blockers?.trim() || "Không có",
+        planTomorrow: body.planTomorrow?.trim() || "",
+        hoursWorked: Number(body.hoursWorked) || 8,
+        completionRate: Number(body.completionRate) || 100,
+        status: body.status || "COMPLETED",
+        createdAt: new Date().toISOString(),
+        feedbacks: []
       };
-      found.feedbacks = found.feedbacks || [];
-      found.feedbacks.push(newFeedback);
-      return res.status(201).json({ success: true, message: "Đã thêm nhận xét", feedback: newFeedback });
+
+      // Đưa báo cáo mới lên đầu danh sách và lưu vào Database
+      reports.unshift(newReport);
+      await saveReports(reports);
+
+      return res.status(201).json({
+        success: true,
+        message: "Nộp báo cáo thành công",
+        reportId: newReport.id,
+        createdAt: newReport.createdAt,
+        report: newReport
+      });
     }
 
-    // Normal POST new report
-    const body = req.body || {};
-    const newReport = {
-      id: `REP-${Date.now().toString().slice(-4)}`,
-      employeeName: body.employeeName || "Nhân viên mới",
-      department: body.department || "Kỹ thuật",
-      title: body.title || "Báo cáo công việc",
-      tasksCompleted: body.tasksCompleted || [],
-      tasksInProgress: body.tasksInProgress || [],
-      blockers: body.blockers || "Không có",
-      planTomorrow: body.planTomorrow || "",
-      hoursWorked: parseFloat(body.hoursWorked) || 8,
-      completionRate: parseInt(body.completionRate, 10) || 100,
-      status: body.status || "COMPLETED",
-      createdAt: new Date().toISOString(),
-      feedbacks: []
-    };
-
-    reportsMemory.unshift(newReport);
-    return res.status(201).json({ success: true, message: "Gửi báo cáo thành công", report: newReport });
+    return res.status(405).json({ error: "Method not allowed" });
+  } catch (error) {
+    console.error('[API /api/reports Error]:', error);
+    return res.status(500).json({ error: "Lỗi máy chủ nội bộ", details: error.message });
   }
-
-  res.status(405).json({ error: "Method not allowed" });
 }

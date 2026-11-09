@@ -18,7 +18,7 @@ export default function ReportList({ reports, onAddFeedback }) {
     return matchDept && matchStatus && matchSearch;
   });
 
-  const handleFeedbackSubmit = (reportId) => {
+  const handleFeedbackSubmit = async (reportId) => {
     const comment = feedbackInput[reportId]?.trim();
     const adminName = adminNameInput[reportId]?.trim() || 'Quản trị viên';
 
@@ -27,7 +27,7 @@ export default function ReportList({ reports, onAddFeedback }) {
       return;
     }
 
-    onAddFeedback(reportId, adminName, comment);
+    await onAddFeedback(reportId, adminName, comment);
     setFeedbackInput(prev => ({ ...prev, [reportId]: '' }));
   };
 
