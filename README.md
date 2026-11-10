@@ -43,12 +43,24 @@ Dự án được xây dựng hoàn toàn bằng **React (Vite) + Chart.js + Ver
    - **Output Directory:** `dist`
 4. Bấm **Deploy**.
 
-### Bước 2: Kích hoạt Vercel KV / Upstash (Khuyên dùng để lưu trữ vĩnh viễn)
+### Bước 2: Cấu hình Database Vĩnh Viễn (MongoDB Atlas hoặc Vercel KV)
+
+#### Cách 1: Kết nối MongoDB Atlas (Khuyên dùng)
+1. Tạo cluster miễn phí (M0 Sandbox) tại [MongoDB Atlas](https://www.mongodb.com/cloud/atlas).
+2. Vào phần **Database Access** tạo user và password, trong **Network Access** chọn **Allow Access from Anywhere** (`0.0.0.0/0`).
+3. Lấy Connection String dạng:
+   `mongodb+srv://<username>:<password>@cluster0.xxxx.mongodb.net/?retryWrites=true&w=majority`
+4. Vào Vercel > Project `mail247` > **Settings** > **Environment Variables**:
+   - Tên biến: `MONGODB_URI`
+   - Giá trị: Chuỗi connection string của bạn
+5. Redeploy lại dự án để dữ liệu tồn tại vĩnh viễn không bao giờ bị mất!
+
+#### Cách 2: Kích hoạt Vercel KV / Upstash
 1. Trong trang quản lý Project trên Vercel, chọn tab **Storage**.
 2. Bấm **Create Database** ➔ Chọn **KV** (Powered by Upstash).
 3. Đặt tên database và bấm **Create**.
-4. Chọn **Connect to Project** và liên kết với project `mail247` vừa tạo. Vercel sẽ tự động cấu hình các biến môi trường `KV_REST_API_URL` và `KV_REST_API_TOKEN`.
-5. Vào tab **Deployments** ➔ Bấm **Redeploy** để dự án nhận cấu hình database mới nhất.
+4. Chọn **Connect to Project** và liên kết với project `mail247`. Vercel sẽ tự động cấu hình các biến môi trường `KV_REST_API_URL` và `KV_REST_API_TOKEN`.
+5. Vào tab **Deployments** ➔ Bấm **Redeploy**.
 
 ---
 
