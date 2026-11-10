@@ -118,6 +118,26 @@ export default function ApiDocuments() {
       curl: `curl -X POST https://your-domain.vercel.app/api/reports \\
   -H "Content-Type: application/json" \\
   -d '{"employees":[{"name":"Nguyễn Văn An"},{"name":"Phạm Quốc Bảo"}],"title":"Cập nhật hệ thống","tasksInProgress":["Review code","Deploy staging"],"adminNote":"Lưu ý kiểm tra logs"}'`
+    },
+    {
+      method: "GET",
+      path: "/api/tasks",
+      title: "6. API Nhân viên nhận danh sách việc được giao (Get Assigned Tasks)",
+      description: "Nhân viên hoặc Bot Telegram/Zalo/Mobile gọi endpoint này để nhận danh sách công việc đang được giao, lọc theo tên nhân viên, phòng ban hoặc trạng thái, kèm theo ghi chú và chỉ đạo từ Quản trị viên.",
+      requestBody: null,
+      responseBody: `{\n  "success": true,\n  "count": 2,\n  "filter": {\n    "employee": "Nguyễn Văn An",\n    "status": "IN_PROGRESS"\n  },\n  "tasks": [\n    {\n      "taskId": "REP-2026-001",\n      "employeeName": "Nguyễn Văn An",\n      "department": "Kỹ thuật / Backend",\n      "title": "Nâng cấp bảo mật OAuth2 & Caching API",\n      "status": "IN_PROGRESS",\n      "completionRate": 30,\n      "hoursWorked": 4,\n      "tasksInProgress": [\n        "Thiết lập token rotation",\n        "Tối ưu Redis TTL"\n      ],\n      "tasksCompleted": [\n        "Phân tích lỗ hổng bảo mật"\n      ],\n      "adminInstructions": [\n        {\n          "adminName": "Team Lead",\n          "instruction": "Ưu tiên hoàn thành trước thứ Sáu để demo",\n          "assignedAt": "2026-11-10T11:00:00.000Z"\n        }\n      ]\n    }\n  ]\n}`,
+      curl: `curl -X GET "https://your-domain.vercel.app/api/tasks?employee=Nguyễn+Văn+An&status=IN_PROGRESS"`
+    },
+    {
+      method: "POST",
+      path: "/api/tasks",
+      title: "7. API Nhân viên cập nhật tiến độ công việc được giao (Update Task Progress)",
+      description: "Nhân viên cập nhật tiến độ hoàn thành (%), số giờ đã làm, tích chọn việc đã làm xong, hoặc gửi phản hồi ngược lại cho quản lý khi xử lý công việc được giao.",
+      requestBody: `{\n  "taskId": "REP-2026-001",\n  "completionRate": 100,\n  "status": "COMPLETED",\n  "hoursWorked": 8,\n  "taskCompleted": "Hoàn tất kiểm thử và merge code vào main",\n  "employeeNote": "Đã triển khai xong và test đạt 100% test case"\n}`,
+      responseBody: `{\n  "success": true,\n  "message": "Cập nhật tiến độ công việc thành công",\n  "taskId": "REP-2026-001"\n}`,
+      curl: `curl -X POST https://your-domain.vercel.app/api/tasks \\
+  -H "Content-Type: application/json" \\
+  -d '{"taskId":"REP-2026-001","completionRate":100,"status":"COMPLETED","employeeNote":"Đã hoàn tất toàn bộ yêu cầu"}'`
     }
   ];
 

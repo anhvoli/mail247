@@ -1,15 +1,16 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import url from 'url';
-import handler from './api/reports.js';
+import reportsHandler from './api/reports.js';
+import tasksHandler from './api/tasks.js';
 
-function apiPlugin() {
-  const handleApi = async (req, res, next) => {
+function createApiMiddleware(handler) {
+  return async (req, res, next) => {
     try {
       const parsedUrl = url.parse(req.url, true);
       req.query = parsedUrl.query;
 
-      // Đọc body nếu là POST / PUT
+      // Đọc body nếu là POST / PUT / PATCH
       if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
         let bodyStr = '';
         req.on('data', chunk => { bodyStr += chunk; });
@@ -49,14 +50,21 @@ function apiPlugin() {
       res.end(JSON.stringify({ error: err.message }));
     }
   };
+}
+
+function apiPlugin() {
+  const reportsMiddleware = createApiMiddleware(reportsHandler);
+  const tasksMiddleware = createApiMiddleware(tasksHandler);
 
   return {
     name: 'vite-api-server',
     configureServer(server) {
-      server.middlewares.use('/api/reports', handleApi);
+      server.middlewares.use('/api/tasks', tasksMiddleware);
+      server.middlewares.use('/api/reports', reportsMiddleware);
     },
     configurePreviewServer(server) {
-      server.middlewares.use('/api/reports', handleApi);
+      server.middlewares.use('/api/tasks', tasksMiddleware);
+      server.middlewares.use('/api/reports', reportsMiddleware);
     }
   };
 }
