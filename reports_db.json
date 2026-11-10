@@ -1,0 +1,552 @@
+[
+  {
+    "id": "REP-6034",
+    "title": "Dự án Nâng cấp Hệ thống Toàn diện",
+    "status": "COMPLETED",
+    "blockers": "Không có",
+    "createdAt": "2026-11-10T13:32:06.034Z",
+    "feedbacks": [
+      {
+        "id": "fb-1794317526034",
+        "comment": "Ưu tiên hoàn thành trong tuần này",
+        "adminName": "Project Director",
+        "createdAt": "2026-11-10T13:32:06.034Z"
+      },
+      {
+        "id": "note-1794317534036",
+        "adminName": "Batch User 1",
+        "comment": "[Cập nhật tiến độ]: Đã hoàn thành xuất sắc nhiệm vụ được giao.",
+        "createdAt": "2026-11-10T13:32:14.036Z"
+      }
+    ],
+    "department": "Kỹ thuật / Backend",
+    "hoursWorked": 8.5,
+    "employeeName": "Batch User 1",
+    "planTomorrow": "",
+    "completionRate": 95,
+    "tasksCompleted": [],
+    "tasksInProgress": [
+      "Phân tích kiến trúc",
+      "Dựng prototype"
+    ],
+    "updatedAt": "2026-11-10T13:32:14.037Z"
+  },
+  {
+    "id": "REP-6035",
+    "title": "Dự án Nâng cấp Hệ thống Toàn diện",
+    "status": "IN_PROGRESS",
+    "blockers": "Không có",
+    "createdAt": "2026-11-10T13:32:06.134Z",
+    "feedbacks": [
+      {
+        "id": "fb-1794317526035",
+        "comment": "Ưu tiên hoàn thành trong tuần này",
+        "adminName": "Project Director",
+        "createdAt": "2026-11-10T13:32:06.044Z"
+      }
+    ],
+    "department": "Thiết kế UI/UX",
+    "hoursWorked": 6,
+    "employeeName": "Batch User 2",
+    "planTomorrow": "",
+    "completionRate": 0,
+    "tasksCompleted": [],
+    "tasksInProgress": [
+      "Phân tích kiến trúc",
+      "Dựng prototype"
+    ]
+  },
+  {
+    "id": "REP-6036",
+    "title": "Dự án Nâng cấp Hệ thống Toàn diện",
+    "status": "IN_PROGRESS",
+    "blockers": "Không có",
+    "createdAt": "2026-11-10T13:32:06.234Z",
+    "feedbacks": [
+      {
+        "id": "fb-1794317526036",
+        "comment": "Ưu tiên hoàn thành trong tuần này",
+        "adminName": "Project Director",
+        "createdAt": "2026-11-10T13:32:06.054Z"
+      }
+    ],
+    "department": "Kinh doanh & Dự án",
+    "hoursWorked": 6,
+    "employeeName": "Batch User 3",
+    "planTomorrow": "",
+    "completionRate": 0,
+    "tasksCompleted": [],
+    "tasksInProgress": [
+      "Phân tích kiến trúc",
+      "Dựng prototype"
+    ]
+  },
+  {
+    "id": "REP-4437",
+    "title": "Kiểm thử hệ thống WorkReport",
+    "status": "COMPLETED",
+    "blockers": "Không có",
+    "createdAt": "2026-11-10T13:32:04.437Z",
+    "feedbacks": [
+      {
+        "id": "fb-1794317525346",
+        "comment": "Báo cáo rất chi tiết và hoàn thành tốt nhiệm vụ.",
+        "adminName": "Lead Reviewer",
+        "createdAt": "2026-11-10T13:32:05.346Z"
+      }
+    ],
+    "department": "QA & Testing",
+    "hoursWorked": 8,
+    "employeeName": "Tester AI",
+    "planTomorrow": "Tiếp tục kiểm thử giao diện",
+    "completionRate": 100,
+    "tasksCompleted": [
+      "Chạy test suite tự động",
+      "Xác thực API CRUD"
+    ],
+    "tasksInProgress": [
+      "Đo hiệu năng và load test"
+    ]
+  },
+  {
+    "id": "REP-0231",
+    "title": "Dự án Nâng cấp Hệ thống Toàn diện",
+    "status": "COMPLETED",
+    "blockers": "Không có",
+    "createdAt": "2026-11-10T13:16:00.231Z",
+    "feedbacks": [
+      {
+        "id": "fb-1794316560231",
+        "comment": "Ưu tiên hoàn thành trong tuần này",
+        "adminName": "Project Director",
+        "createdAt": "2026-11-10T13:16:00.231Z"
+      },
+      {
+        "id": "note-1794316573519",
+        "comment": "[Cập nhật tiến độ]: Đã hoàn thành xuất sắc nhiệm vụ được giao.",
+        "adminName": "Batch User 1",
+        "createdAt": "2026-11-10T13:16:13.519Z"
+      }
+    ],
+    "updatedAt": "2026-11-10T13:16:13.520Z",
+    "department": "Kỹ thuật / Backend",
+    "hoursWorked": 8.5,
+    "employeeName": "Batch User 1",
+    "planTomorrow": "",
+    "completionRate": 95,
+    "tasksCompleted": [],
+    "tasksInProgress": [
+      "Phân tích kiến trúc",
+      "Dựng prototype"
+    ]
+  },
+  {
+    "id": "REP-0232",
+    "title": "Dự án Nâng cấp Hệ thống Toàn diện",
+    "status": "IN_PROGRESS",
+    "blockers": "Không có",
+    "createdAt": "2026-11-10T13:16:00.331Z",
+    "feedbacks": [
+      {
+        "id": "fb-1794316560232",
+        "comment": "Ưu tiên hoàn thành trong tuần này",
+        "adminName": "Project Director",
+        "createdAt": "2026-11-10T13:16:00.241Z"
+      }
+    ],
+    "department": "Thiết kế UI/UX",
+    "hoursWorked": 6,
+    "employeeName": "Batch User 2",
+    "planTomorrow": "",
+    "completionRate": 0,
+    "tasksCompleted": [],
+    "tasksInProgress": [
+      "Phân tích kiến trúc",
+      "Dựng prototype"
+    ]
+  },
+  {
+    "id": "REP-0233",
+    "title": "Dự án Nâng cấp Hệ thống Toàn diện",
+    "status": "IN_PROGRESS",
+    "blockers": "Không có",
+    "createdAt": "2026-11-10T13:16:00.431Z",
+    "feedbacks": [
+      {
+        "id": "fb-1794316560233",
+        "comment": "Ưu tiên hoàn thành trong tuần này",
+        "adminName": "Project Director",
+        "createdAt": "2026-11-10T13:16:00.251Z"
+      }
+    ],
+    "department": "Kinh doanh & Dự án",
+    "hoursWorked": 6,
+    "employeeName": "Batch User 3",
+    "planTomorrow": "",
+    "completionRate": 0,
+    "tasksCompleted": [],
+    "tasksInProgress": [
+      "Phân tích kiến trúc",
+      "Dựng prototype"
+    ]
+  },
+  {
+    "id": "REP-0226",
+    "title": "Kiểm thử hệ thống WorkReport",
+    "status": "COMPLETED",
+    "blockers": "Không có",
+    "createdAt": "2026-11-10T13:16:00.226Z",
+    "feedbacks": [
+      {
+        "id": "fb-1794316560229",
+        "comment": "Báo cáo rất chi tiết và hoàn thành tốt nhiệm vụ.",
+        "adminName": "Lead Reviewer",
+        "createdAt": "2026-11-10T13:16:00.229Z"
+      }
+    ],
+    "department": "QA & Testing",
+    "hoursWorked": 8,
+    "employeeName": "Tester AI",
+    "planTomorrow": "Tiếp tục kiểm thử giao diện",
+    "completionRate": 100,
+    "tasksCompleted": [
+      "Chạy test suite tự động",
+      "Xác thực API CRUD"
+    ],
+    "tasksInProgress": [
+      "Đo hiệu năng và load test"
+    ]
+  },
+  {
+    "id": "REP-8128",
+    "title": "Nâng cấp bảo mật OAuth2 & Caching",
+    "status": "COMPLETED",
+    "blockers": "Không có",
+    "createdAt": "2026-11-10T11:00:58.128Z",
+    "feedbacks": [
+      {
+        "id": "fb-1794308458128",
+        "comment": "Kiểm tra kỹ trên staging trước khi merge",
+        "adminName": "Quản trị viên (Giao việc)",
+        "createdAt": "2026-11-10T11:00:58.128Z"
+      },
+      {
+        "id": "note-1794312997862",
+        "comment": "[Cập nhật tiến độ]: Đã hoàn thành xuất sắc nhiệm vụ được giao.",
+        "adminName": "Nguyễn Văn An",
+        "createdAt": "2026-11-10T12:16:37.862Z"
+      }
+    ],
+    "updatedAt": "2026-11-10T12:16:37.863Z",
+    "department": "Kỹ thuật / Backend",
+    "hoursWorked": 8.5,
+    "employeeName": "Nguyễn Văn An",
+    "planTomorrow": "",
+    "completionRate": 95,
+    "tasksCompleted": [],
+    "tasksInProgress": [
+      "Thiết lập token rotation",
+      "Tối ưu Redis TTL"
+    ]
+  },
+  {
+    "id": "REP-8129",
+    "title": "Nâng cấp bảo mật OAuth2 & Caching",
+    "status": "IN_PROGRESS",
+    "blockers": "Không có",
+    "createdAt": "2026-11-10T11:00:58.228Z",
+    "feedbacks": [
+      {
+        "id": "fb-1794308458129",
+        "comment": "Kiểm tra kỹ trên staging trước khi merge",
+        "adminName": "Quản trị viên (Giao việc)",
+        "createdAt": "2026-11-10T11:00:58.138Z"
+      }
+    ],
+    "department": "Thiết kế UI/UX",
+    "hoursWorked": 8,
+    "employeeName": "Trần Thị Mai",
+    "planTomorrow": "",
+    "completionRate": 0,
+    "tasksCompleted": [],
+    "tasksInProgress": [
+      "Thiết lập token rotation",
+      "Tối ưu Redis TTL"
+    ]
+  },
+  {
+    "id": "REP-8645",
+    "title": "Dự án Nâng cấp Hệ thống Toàn diện",
+    "status": "IN_PROGRESS",
+    "blockers": "Không có",
+    "createdAt": "2026-11-10T11:00:38.645Z",
+    "feedbacks": [
+      {
+        "id": "fb-1794308438645",
+        "comment": "Ưu tiên hoàn thành trong tuần này",
+        "adminName": "Project Director",
+        "createdAt": "2026-11-10T11:00:38.645Z"
+      }
+    ],
+    "department": "Kỹ thuật / Backend",
+    "hoursWorked": 6,
+    "employeeName": "Batch User 1",
+    "planTomorrow": "",
+    "completionRate": 0,
+    "tasksCompleted": [],
+    "tasksInProgress": [
+      "Phân tích kiến trúc",
+      "Dựng prototype"
+    ]
+  },
+  {
+    "id": "REP-8646",
+    "title": "Dự án Nâng cấp Hệ thống Toàn diện",
+    "status": "IN_PROGRESS",
+    "blockers": "Không có",
+    "createdAt": "2026-11-10T11:00:38.745Z",
+    "feedbacks": [
+      {
+        "id": "fb-1794308438646",
+        "comment": "Ưu tiên hoàn thành trong tuần này",
+        "adminName": "Project Director",
+        "createdAt": "2026-11-10T11:00:38.655Z"
+      }
+    ],
+    "department": "Thiết kế UI/UX",
+    "hoursWorked": 6,
+    "employeeName": "Batch User 2",
+    "planTomorrow": "",
+    "completionRate": 0,
+    "tasksCompleted": [],
+    "tasksInProgress": [
+      "Phân tích kiến trúc",
+      "Dựng prototype"
+    ]
+  },
+  {
+    "id": "REP-8647",
+    "title": "Dự án Nâng cấp Hệ thống Toàn diện",
+    "status": "IN_PROGRESS",
+    "blockers": "Không có",
+    "createdAt": "2026-11-10T11:00:38.845Z",
+    "feedbacks": [
+      {
+        "id": "fb-1794308438647",
+        "comment": "Ưu tiên hoàn thành trong tuần này",
+        "adminName": "Project Director",
+        "createdAt": "2026-11-10T11:00:38.665Z"
+      }
+    ],
+    "department": "Kinh doanh & Dự án",
+    "hoursWorked": 6,
+    "employeeName": "Batch User 3",
+    "planTomorrow": "",
+    "completionRate": 0,
+    "tasksCompleted": [],
+    "tasksInProgress": [
+      "Phân tích kiến trúc",
+      "Dựng prototype"
+    ]
+  },
+  {
+    "id": "REP-8639",
+    "title": "Kiểm thử hệ thống WorkReport",
+    "status": "COMPLETED",
+    "blockers": "Không có",
+    "createdAt": "2026-11-10T11:00:38.639Z",
+    "feedbacks": [
+      {
+        "id": "fb-1794308438642",
+        "comment": "Báo cáo rất chi tiết và hoàn thành tốt nhiệm vụ.",
+        "adminName": "Lead Reviewer",
+        "createdAt": "2026-11-10T11:00:38.642Z"
+      }
+    ],
+    "department": "QA & Testing",
+    "hoursWorked": 8,
+    "employeeName": "Tester AI",
+    "planTomorrow": "Tiếp tục kiểm thử giao diện",
+    "completionRate": 100,
+    "tasksCompleted": [
+      "Chạy test suite tự động",
+      "Xác thực API CRUD"
+    ],
+    "tasksInProgress": [
+      "Đo hiệu năng và load test"
+    ]
+  },
+  {
+    "id": "REP-3360",
+    "title": "HTTP Integration Test",
+    "status": "COMPLETED",
+    "blockers": "Không có",
+    "createdAt": "2026-11-10T05:56:33.360Z",
+    "feedbacks": [],
+    "department": "DevOps",
+    "hoursWorked": 8,
+    "employeeName": "Nguyen Van Dev",
+    "planTomorrow": "",
+    "completionRate": 100,
+    "tasksCompleted": [
+      "Test Vite middleware"
+    ],
+    "tasksInProgress": []
+  },
+  {
+    "id": "REP-3577",
+    "title": "Kiểm thử hệ thống WorkReport",
+    "status": "COMPLETED",
+    "blockers": "Không có",
+    "createdAt": "2026-11-10T05:56:13.577Z",
+    "feedbacks": [
+      {
+        "id": "fb-1794290173586",
+        "comment": "Báo cáo rất chi tiết và hoàn thành tốt nhiệm vụ.",
+        "adminName": "Lead Reviewer",
+        "createdAt": "2026-11-10T05:56:13.586Z"
+      }
+    ],
+    "department": "QA & Testing",
+    "hoursWorked": 8,
+    "employeeName": "Tester AI",
+    "planTomorrow": "Tiếp tục kiểm thử giao diện",
+    "completionRate": 100,
+    "tasksCompleted": [
+      "Chạy test suite tự động",
+      "Xác thực API CRUD"
+    ],
+    "tasksInProgress": [
+      "Đo hiệu năng và load test"
+    ]
+  },
+  {
+    "id": "REP-2026-001",
+    "title": "Tối ưu hóa API và tích hợp caching Redis",
+    "status": "COMPLETED",
+    "blockers": "Không có",
+    "createdAt": "2026-11-09T08:30:00.000Z",
+    "feedbacks": [
+      {
+        "id": "fb-1",
+        "comment": "Làm rất tốt em nhé, tốc độ xử lý API cải thiện rõ rệt!",
+        "adminName": "Trần Trưởng Phòng",
+        "createdAt": "2026-11-09T10:15:00.000Z"
+      }
+    ],
+    "department": "Kỹ thuật / Backend",
+    "hoursWorked": 8,
+    "employeeName": "Nguyễn Văn An",
+    "planTomorrow": "Hoàn thiện unit test và review code cùng team lead",
+    "completionRate": 95,
+    "tasksCompleted": [
+      "Refactor module tổng hợp báo cáo công việc",
+      "Sửa lỗi phân trang và lọc theo phòng ban",
+      "Thêm middleware xử lý lỗi tập trung"
+    ],
+    "tasksInProgress": [
+      "Viết unit test cho endpoint nộp báo cáo (đạt 70%)"
+    ]
+  },
+  {
+    "id": "REP-2026-002",
+    "title": "Hoàn thiện wireframe và UI Dashboard",
+    "status": "IN_PROGRESS",
+    "blockers": "Chờ duyệt bảng màu từ ban giám đốc",
+    "createdAt": "2026-11-09T09:00:00.000Z",
+    "feedbacks": [
+      {
+        "id": "fb-2",
+        "comment": "Giao diện nhìn chuyên nghiệp và thoáng đãng. Bảng màu đã duyệt nhé!",
+        "adminName": "Nguyễn Giám Đốc",
+        "createdAt": "2026-11-09T11:00:00.000Z"
+      }
+    ],
+    "department": "Thiết kế UI/UX",
+    "hoursWorked": 7.5,
+    "employeeName": "Trần Thị Mai",
+    "planTomorrow": "Xuất file assets và bàn giao thông số cho đội Frontend",
+    "completionRate": 85,
+    "tasksCompleted": [
+      "Thiết kế xong bộ UI Dashboard phong cách hiện đại",
+      "Thống nhất mã màu và icon system trên Figma"
+    ],
+    "tasksInProgress": [
+      "Chỉnh sửa phiên bản responsive mobile"
+    ]
+  },
+  {
+    "id": "REP-2026-003",
+    "title": "Gặp gỡ khách hàng doanh nghiệp và demo giải pháp",
+    "status": "COMPLETED",
+    "blockers": "Không có",
+    "createdAt": "2026-11-09T09:45:00.000Z",
+    "feedbacks": [
+      {
+        "id": "fb-3",
+        "comment": "Tiến độ rất khả quan, cố gắng chốt deal sớm trong tuần này.",
+        "adminName": "Trần Trưởng Phòng",
+        "createdAt": "2026-11-09T13:20:00.000Z"
+      }
+    ],
+    "department": "Kinh doanh & Dự án",
+    "hoursWorked": 8.5,
+    "employeeName": "Lê Hoàng Dũng",
+    "planTomorrow": "Họp chốt điều khoản thanh toán với khách hàng Alpha",
+    "completionRate": 90,
+    "tasksCompleted": [
+      "Demo giải pháp quản lý cho 3 đối tác khu vực miền Bắc",
+      "Gửi email báo giá và kế hoạch triển khai"
+    ],
+    "tasksInProgress": [
+      "Soạn thảo hợp đồng nguyên tắc đối tác Alpha"
+    ]
+  },
+  {
+    "id": "REP-2026-004",
+    "title": "Tích hợp biểu đồ Chart.js và tính năng tương tác",
+    "status": "COMPLETED",
+    "blockers": "Cần thêm dữ liệu mẫu để kiểm tra đồ thị",
+    "createdAt": "2026-11-09T10:30:00.000Z",
+    "feedbacks": [],
+    "department": "Kỹ thuật / Frontend",
+    "hoursWorked": 8,
+    "employeeName": "Phạm Quốc Bảo",
+    "planTomorrow": "Thêm bộ lọc tìm kiếm nâng cao theo thời gian",
+    "completionRate": 90,
+    "tasksCompleted": [
+      "Dựng biểu đồ hiệu suất nhân viên và phân bổ trạng thái",
+      "Gắn tính năng quản trị viên phản hồi trực tiếp"
+    ],
+    "tasksInProgress": [
+      "Kiểm thử tính tương thích trên các trình duyệt Safari & Edge"
+    ]
+  },
+  {
+    "id": "REP-2026-005",
+    "title": "Kiểm tra hệ thống máy chủ và bảo trì định kỳ",
+    "status": "BLOCKED",
+    "blockers": "Đang chờ cấp quyền truy cập server phụ trợ",
+    "createdAt": "2026-11-09T11:15:00.000Z",
+    "feedbacks": [
+      {
+        "id": "fb-4",
+        "comment": "Đã cấp quyền truy cập server phụ trợ lúc 14:00 rồi nhé Tuấn.",
+        "adminName": "Quản trị viên IT",
+        "createdAt": "2026-11-09T14:05:00.000Z"
+      }
+    ],
+    "department": "Vận hành & Hỗ trợ",
+    "hoursWorked": 6.5,
+    "employeeName": "Hoàng Minh Tuấn",
+    "planTomorrow": "Hoàn thiện kịch bản giám sát uptime 24/7",
+    "completionRate": 75,
+    "tasksCompleted": [
+      "Kiểm tra dung lượng ổ đĩa và RAM hệ thống",
+      "Sao lưu định kỳ cơ sở dữ liệu và cấu hình"
+    ],
+    "tasksInProgress": [
+      "Cấu hình cảnh báo tự động qua webhook"
+    ]
+  }
+]

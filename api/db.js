@@ -135,6 +135,13 @@ export const SEED_REPORTS = [
   }
 ];
 
+// ----------------- ONLINE PERSISTENT JSON STORAGE (Lưu file JSON trực tuyến vĩnh viễn) -----------------
+const DEFAULT_JSON_STORAGE_URL = 'https://superjsonblob.com/api/jsonBlob/3c9213d8-0cde-4f54-956c-bf3c5a1f0fc7';
+
+const getJsonStorageUrl = () => {
+  return process.env.JSON_STORAGE_URL || DEFAULT_JSON_STORAGE_URL;
+};
+
 // ----------------- MONGODB CONNECTION CACHING (Dành cho Vercel Serverless) -----------------
 let cachedClient = null;
 let cachedDb = null;
@@ -187,7 +194,7 @@ const getFilePath = () => {
 };
 
 /**
- * Đọc toàn bộ danh sách báo cáo từ Database (MongoDB -> Vercel KV -> File fallback)
+ * Đọc toàn bộ danh sách báo cáo từ Database (MongoDB -> Persistent JSON Storage -> Vercel KV -> File fallback)
  */
 export async function getReports() {
   // 1. Ưu tiên MongoDB nếu có cấu hình MONGODB_URI
@@ -197,20 +204,45 @@ export async function getReports() {
       const collection = mongoConn.db.collection('reports');
       const docs = await collection.find({}).sort({ createdAt: -1 }).toArray();
       if (docs && docs.length > 0) {
-        // Loại bỏ trường _id của MongoDB trước khi trả về
         return docs.map(({ _id, ...rest }) => rest);
-      } else {
-        // Nếu DB rỗng, nạp seed ban đầu vào MongoDB 1 lần duy nhất
-        const cleanSeed = SEED_REPORTS.map(r => ({ ...r }));
-        await collection.insertMany(cleanSeed);
-        return SEED_REPORTS;
       }
     } catch (err) {
       console.error('[DB] Lỗi đọc từ MongoDB:', err.message);
     }
   }
 
-  // 2. Nếu có cấu hình Vercel KV / Upstash
+  // 2. Đọc từ Online Persistent JSON Storage (Lưu file JSON trực tuyến vĩnh viễn)
+  const jsonUrl = getJsonStorageUrl();
+  if (jsonUrl) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4500);
+      const resp = await fetch(jsonUrl, {
+        signal: controller.signal,
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'mail247-portal/1.0'
+        }
+      });
+      clearTimeout(timeoutId);
+
+      if (resp.ok) {
+        const data = await resp.json();
+        if (Array.isArray(data) && data.length > 0) {
+          // Ghi đồng bộ bản sao vào file fallback
+          try {
+            const filePath = getFilePath();
+            fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
+          } catch {}
+          return data;
+        }
+      }
+    } catch (err) {
+      console.warn('[DB] Lỗi đọc từ Online JSON Storage, fallback sang file:', err.message);
+    }
+  }
+
+  // 3. Nếu có cấu hình Vercel KV / Upstash
   const kv = getKvConfig();
   if (kv) {
     try {
@@ -226,24 +258,31 @@ export async function getReports() {
           }
         }
       }
-      await saveReports(SEED_REPORTS);
-      return SEED_REPORTS;
     } catch (err) {
       console.error('[DB] Lỗi đọc từ Vercel KV:', err.message);
     }
   }
 
-  // 3. Fallback: Đọc từ file JSON persistent
+  // 4. Fallback: Đọc từ file JSON (file repo gốc hoặc /tmp)
   try {
-    const filePath = getFilePath();
-    if (fs.existsSync(filePath)) {
-      const content = fs.readFileSync(filePath, 'utf-8');
+    const rootPath = path.resolve(process.cwd(), 'reports_db.json');
+    if (fs.existsSync(rootPath)) {
+      const content = fs.readFileSync(rootPath, 'utf-8');
       const data = JSON.parse(content);
-      if (Array.isArray(data)) {
+      if (Array.isArray(data) && data.length > 0) {
         return data;
       }
     }
-    fs.writeFileSync(filePath, JSON.stringify(SEED_REPORTS, null, 2), 'utf-8');
+
+    const tmpPath = '/tmp/reports_db.json';
+    if (fs.existsSync(tmpPath)) {
+      const content = fs.readFileSync(tmpPath, 'utf-8');
+      const data = JSON.parse(content);
+      if (Array.isArray(data) && data.length > 0) {
+        return data;
+      }
+    }
+
     return SEED_REPORTS;
   } catch (err) {
     console.error('[DB] Lỗi đọc từ file fallback:', err.message);
@@ -252,15 +291,14 @@ export async function getReports() {
 }
 
 /**
- * Lưu toàn bộ danh sách báo cáo vào Database (MongoDB -> Vercel KV -> File fallback)
+ * Lưu toàn bộ danh sách báo cáo vào Database (MongoDB -> Persistent JSON Storage -> Vercel KV -> File fallback)
  */
 export async function saveReports(reports) {
-  // 1. Ưu tiên MongoDB
+  // 1. Lưu vào MongoDB nếu có
   const mongoConn = await connectToMongo();
   if (mongoConn) {
     try {
       const collection = mongoConn.db.collection('reports');
-      // Dùng bulkWrite để upsert từng báo cáo theo trường id
       if (Array.isArray(reports) && reports.length > 0) {
         const operations = reports.map(report => ({
           updateOne: {
@@ -276,7 +314,29 @@ export async function saveReports(reports) {
     }
   }
 
-  // 2. Đồng bộ Vercel KV nếu có
+  // 2. Lưu vào Online Persistent JSON Storage (Lưu file JSON trực tuyến)
+  const jsonUrl = getJsonStorageUrl();
+  if (jsonUrl) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4500);
+      await fetch(jsonUrl, {
+        method: 'PUT',
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'User-Agent': 'mail247-portal/1.0'
+        },
+        body: JSON.stringify(reports)
+      });
+      clearTimeout(timeoutId);
+    } catch (err) {
+      console.warn('[DB] Lỗi ghi Online JSON Storage:', err.message);
+    }
+  }
+
+  // 3. Đồng bộ Vercel KV nếu có
   const kv = getKvConfig();
   if (kv) {
     try {
@@ -293,10 +353,16 @@ export async function saveReports(reports) {
     }
   }
 
-  // 3. Luôn đồng bộ file fallback cục bộ
+  // 4. Luôn đồng bộ file fallback cục bộ
   try {
-    const filePath = getFilePath();
-    fs.writeFileSync(filePath, JSON.stringify(reports, null, 2), 'utf-8');
+    const rootPath = path.resolve(process.cwd(), 'reports_db.json');
+    try {
+      fs.writeFileSync(rootPath, JSON.stringify(reports, null, 2), 'utf-8');
+    } catch {}
+
+    if (process.env.VERCEL) {
+      fs.writeFileSync('/tmp/reports_db.json', JSON.stringify(reports, null, 2), 'utf-8');
+    }
   } catch (err) {
     console.error('[DB] Lỗi ghi file fallback:', err.message);
   }
