@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { MongoClient } from 'mongodb';
 
 // Dữ liệu ban đầu chuẩn chung cho cả API và Dashboard
 export const SEED_REPORTS = [
@@ -134,15 +135,40 @@ export const SEED_REPORTS = [
   }
 ];
 
-// Đường dẫn file lưu trữ cục bộ/fallback
-const getFilePath = () => {
-  if (process.env.VERCEL) {
-    return '/tmp/reports_db.json';
-  }
-  return path.resolve(process.cwd(), 'reports_db.json');
+// ----------------- MONGODB CONNECTION CACHING (Dành cho Vercel Serverless) -----------------
+let cachedClient = null;
+let cachedDb = null;
+
+const getMongoUri = () => {
+  return process.env.MONGODB_URI || process.env.MONGO_URL || process.env.DATABASE_URL;
 };
 
-// Cấu hình Vercel KV / Upstash Redis
+async function connectToMongo() {
+  const uri = getMongoUri();
+  if (!uri) return null;
+
+  if (cachedClient && cachedDb) {
+    return { client: cachedClient, db: cachedDb };
+  }
+
+  try {
+    const client = new MongoClient(uri, {
+      maxPoolSize: 10,
+      serverSelectionTimeoutMS: 5000,
+    });
+    await client.connect();
+    const dbName = process.env.MONGODB_DB || 'workreport';
+    const db = client.db(dbName);
+    cachedClient = client;
+    cachedDb = db;
+    return { client, db };
+  } catch (err) {
+    console.error('[DB] Lỗi kết nối MongoDB:', err.message);
+    return null;
+  }
+}
+
+// ----------------- VERCEL KV / UPSTASH CONFIG -----------------
 const getKvConfig = () => {
   const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
@@ -152,19 +178,44 @@ const getKvConfig = () => {
   return null;
 };
 
+// Đường dẫn file lưu trữ cục bộ / fallback
+const getFilePath = () => {
+  if (process.env.VERCEL) {
+    return '/tmp/reports_db.json';
+  }
+  return path.resolve(process.cwd(), 'reports_db.json');
+};
+
 /**
- * Đọc toàn bộ danh sách báo cáo từ Database (Vercel KV hoặc File fallback)
+ * Đọc toàn bộ danh sách báo cáo từ Database (MongoDB -> Vercel KV -> File fallback)
  */
 export async function getReports() {
-  const kv = getKvConfig();
+  // 1. Ưu tiên MongoDB nếu có cấu hình MONGODB_URI
+  const mongoConn = await connectToMongo();
+  if (mongoConn) {
+    try {
+      const collection = mongoConn.db.collection('reports');
+      const docs = await collection.find({}).sort({ createdAt: -1 }).toArray();
+      if (docs && docs.length > 0) {
+        // Loại bỏ trường _id của MongoDB trước khi trả về
+        return docs.map(({ _id, ...rest }) => rest);
+      } else {
+        // Nếu DB rỗng, nạp seed ban đầu vào MongoDB 1 lần duy nhất
+        const cleanSeed = SEED_REPORTS.map(r => ({ ...r }));
+        await collection.insertMany(cleanSeed);
+        return SEED_REPORTS;
+      }
+    } catch (err) {
+      console.error('[DB] Lỗi đọc từ MongoDB:', err.message);
+    }
+  }
 
-  // 1. Nếu có cấu hình Vercel KV / Upstash
+  // 2. Nếu có cấu hình Vercel KV / Upstash
+  const kv = getKvConfig();
   if (kv) {
     try {
       const resp = await fetch(`${kv.url}/get/work_reports_data`, {
-        headers: {
-          Authorization: `Bearer ${kv.token}`
-        }
+        headers: { Authorization: `Bearer ${kv.token}` }
       });
       if (resp.ok) {
         const json = await resp.json();
@@ -175,15 +226,14 @@ export async function getReports() {
           }
         }
       }
-      // Chưa có dữ liệu trên KV -> ghi seed data
       await saveReports(SEED_REPORTS);
       return SEED_REPORTS;
     } catch (err) {
-      console.error('[DB] Lỗi đọc từ Vercel KV, fallback sang file:', err);
+      console.error('[DB] Lỗi đọc từ Vercel KV:', err.message);
     }
   }
 
-  // 2. Fallback: Đọc từ file JSON persistent
+  // 3. Fallback: Đọc từ file JSON persistent
   try {
     const filePath = getFilePath();
     if (fs.existsSync(filePath)) {
@@ -193,25 +243,44 @@ export async function getReports() {
         return data;
       }
     }
-    // Tạo file mới với dữ liệu mẫu ban đầu
     fs.writeFileSync(filePath, JSON.stringify(SEED_REPORTS, null, 2), 'utf-8');
     return SEED_REPORTS;
   } catch (err) {
-    console.error('[DB] Lỗi đọc từ file fallback:', err);
+    console.error('[DB] Lỗi đọc từ file fallback:', err.message);
     return SEED_REPORTS;
   }
 }
 
 /**
- * Lưu toàn bộ danh sách báo cáo vào Database (Vercel KV hoặc File fallback)
+ * Lưu toàn bộ danh sách báo cáo vào Database (MongoDB -> Vercel KV -> File fallback)
  */
 export async function saveReports(reports) {
-  const kv = getKvConfig();
+  // 1. Ưu tiên MongoDB
+  const mongoConn = await connectToMongo();
+  if (mongoConn) {
+    try {
+      const collection = mongoConn.db.collection('reports');
+      // Dùng bulkWrite để upsert từng báo cáo theo trường id
+      if (Array.isArray(reports) && reports.length > 0) {
+        const operations = reports.map(report => ({
+          updateOne: {
+            filter: { id: report.id },
+            update: { $set: report },
+            upsert: true
+          }
+        }));
+        await collection.bulkWrite(operations);
+      }
+    } catch (err) {
+      console.error('[DB] Lỗi ghi MongoDB:', err.message);
+    }
+  }
 
-  // 1. Nếu có cấu hình Vercel KV / Upstash
+  // 2. Đồng bộ Vercel KV nếu có
+  const kv = getKvConfig();
   if (kv) {
     try {
-      const resp = await fetch(`${kv.url}/set/work_reports_data`, {
+      await fetch(`${kv.url}/set/work_reports_data`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${kv.token}`,
@@ -219,20 +288,17 @@ export async function saveReports(reports) {
         },
         body: JSON.stringify(reports)
       });
-      if (!resp.ok) {
-        console.error('[DB] Ghi Vercel KV không thành công:', await resp.text());
-      }
     } catch (err) {
-      console.error('[DB] Lỗi ghi Vercel KV:', err);
+      console.error('[DB] Lỗi ghi Vercel KV:', err.message);
     }
   }
 
-  // 2. Luôn đồng bộ vào file fallback để dự phòng
+  // 3. Luôn đồng bộ file fallback cục bộ
   try {
     const filePath = getFilePath();
     fs.writeFileSync(filePath, JSON.stringify(reports, null, 2), 'utf-8');
   } catch (err) {
-    console.error('[DB] Lỗi ghi file fallback:', err);
+    console.error('[DB] Lỗi ghi file fallback:', err.message);
   }
 
   return reports;
