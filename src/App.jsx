@@ -12,12 +12,14 @@ import {
   Sparkles,
   Zap,
   RefreshCw,
-  AlertCircle
+  AlertCircle,
+  UserPlus
 } from 'lucide-react';
 import { loadReports, saveReports } from './mockData';
 import PerformanceCharts from './components/PerformanceCharts';
 import ReportList from './components/ReportList';
 import SubmitReport from './components/SubmitReport';
+import BatchAssignTask from './components/BatchAssignTask';
 import ApiDocuments from './components/ApiDocuments';
 
 export default function App() {
@@ -120,6 +122,56 @@ export default function App() {
     }
   };
 
+  // Xử lý phân công & giao việc cho nhiều nhân viên: POST /api/reports (Batch)
+  const handleBatchAssign = async (batchPayload) => {
+    try {
+      setIsRefreshing(true);
+      const resp = await fetch('/api/reports', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(batchPayload)
+      });
+
+      if (!resp.ok) {
+        throw new Error(`Giao việc thất bại (HTTP ${resp.status})`);
+      }
+
+      // Làm mới dữ liệu từ server
+      await fetchReportsFromApi(true);
+      return true;
+    } catch (err) {
+      console.error('[Batch Assign Error]:', err);
+      // Fallback cục bộ nếu mất mạng
+      const now = Date.now();
+      const newLocalReports = (batchPayload.employees || []).map((emp, i) => ({
+        id: `REP-${(now + i).toString().slice(-4)}`,
+        employeeName: typeof emp === 'object' ? emp.name : emp,
+        department: typeof emp === 'object' && emp.department ? emp.department : (batchPayload.department || 'Kỹ thuật'),
+        title: batchPayload.title,
+        tasksCompleted: [],
+        tasksInProgress: batchPayload.tasksInProgress || [],
+        blockers: 'Không có',
+        planTomorrow: '',
+        hoursWorked: batchPayload.hoursWorked || 8,
+        completionRate: 0,
+        status: 'IN_PROGRESS',
+        createdAt: new Date(now + i * 100).toISOString(),
+        feedbacks: batchPayload.adminNote ? [{
+          id: `fb-${now + i}`,
+          adminName: batchPayload.adminName || 'Quản trị viên',
+          comment: batchPayload.adminNote,
+          createdAt: new Date().toISOString()
+        }] : []
+      }));
+      setReports(prev => [...newLocalReports, ...prev]);
+      return true;
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   // Xử lý gửi nhận xét của Admin qua API (POST /api/reports/:id/feedback)
   const handleAddFeedback = async (reportId, adminName, comment) => {
     try {
@@ -203,6 +255,12 @@ export default function App() {
                 onClick={() => { setActiveTab('dashboard'); fetchReportsFromApi(true); }}
               >
                 <LayoutDashboard size={16} /> Dashboard
+              </button>
+              <button
+                className={`nav-item ${activeTab === 'assign' ? 'active' : ''}`}
+                onClick={() => setActiveTab('assign')}
+              >
+                <UserPlus size={16} /> Giao Việc (Nhiều NV)
               </button>
               <button
                 className={`nav-item ${activeTab === 'submit' ? 'active' : ''}`}
@@ -325,6 +383,15 @@ export default function App() {
 
             {/* Report Table with Live Admin Feedback */}
             <ReportList reports={reports} onAddFeedback={handleAddFeedback} />
+          </div>
+        )}
+
+        {activeTab === 'assign' && (
+          <div className="animate-fade-in">
+            <BatchAssignTask
+              reports={reports}
+              onAssignTasks={handleBatchAssign}
+            />
           </div>
         )}
 

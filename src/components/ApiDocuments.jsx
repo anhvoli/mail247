@@ -107,6 +107,17 @@ export default function ApiDocuments() {
       curl: `curl -X POST https://your-domain.vercel.app/api/reports/REP-2026-001/feedback \\
   -H "Content-Type: application/json" \\
   -d '{"adminName":"Trần Trưởng Phòng","comment":"Duyệt nhé em!"}'`
+    },
+    {
+      method: "POST",
+      path: "/api/reports (Batch)",
+      title: "5. Giao việc cho nhiều nhân viên cùng lúc (Batch Task Assignment)",
+      description: "Quản lý / Trưởng phòng hoặc Bot phân công cùng một đầu việc hoặc dự án cho danh sách nhiều nhân sự cùng lúc. Hệ thống sẽ tự động tạo các bản ghi tiến độ riêng cho từng nhân viên.",
+      requestBody: `{\n  "employees": [\n    { "name": "Nguyễn Văn An", "department": "Kỹ thuật / Backend" },\n    { "name": "Phạm Quốc Bảo", "department": "Kỹ thuật / Frontend" },\n    { "name": "Trần Thị Mai", "department": "Thiết kế UI/UX" }\n  ],\n  "title": "Nâng cấp giao diện Mobile & Caching API",\n  "department": "Kỹ thuật / Backend",\n  "tasksInProgress": [\n    "Thiết kế responsive layout",\n    "Cấu hình Redis cache",\n    "Kiểm thử tải hệ thống"\n  ],\n  "hoursWorked": 8,\n  "adminNote": "Ưu tiên hoàn thành trước thứ Sáu để demo cho khách hàng",\n  "adminName": "Team Lead"\n}`,
+      responseBody: `{\n  "success": true,\n  "message": "Đã giao việc thành công cho 3 nhân viên",\n  "count": 3,\n  "reports": [\n    { "id": "REP-8901", "employeeName": "Nguyễn Văn An", "title": "..." },\n    { "id": "REP-8902", "employeeName": "Phạm Quốc Bảo", "title": "..." },\n    { "id": "REP-8903", "employeeName": "Trần Thị Mai", "title": "..." }\n  ]\n}`,
+      curl: `curl -X POST https://your-domain.vercel.app/api/reports \\
+  -H "Content-Type: application/json" \\
+  -d '{"employees":[{"name":"Nguyễn Văn An"},{"name":"Phạm Quốc Bảo"}],"title":"Cập nhật hệ thống","tasksInProgress":["Review code","Deploy staging"],"adminNote":"Lưu ý kiểm tra logs"}'`
     }
   ];
 

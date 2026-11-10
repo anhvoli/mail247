@@ -66,9 +66,75 @@ export default async function handler(req, res) {
         });
       }
 
-      // Xử lý gửi báo cáo mới: POST /api/reports
+      // Xử lý gửi báo cáo mới hoặc giao việc cho nhiều nhân viên: POST /api/reports
       const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
-      
+
+      // Hỗ trợ giao việc cho nhiều nhân viên cùng lúc (Batch Task Assignment)
+      const isBatch = Array.isArray(body) || (body.employees && Array.isArray(body.employees) && body.employees.length > 0);
+      if (isBatch) {
+        const empList = Array.isArray(body) ? body : body.employees;
+        const commonTitle = body.title?.trim() || "Phân công công việc mới";
+        const commonTasksCompleted = Array.isArray(body.tasksCompleted) ? body.tasksCompleted : (body.tasksCompleted ? [body.tasksCompleted] : []);
+        const commonTasksInProgress = Array.isArray(body.tasksInProgress) ? body.tasksInProgress : (body.tasksInProgress ? [body.tasksInProgress] : (Array.isArray(body.tasks) ? body.tasks : (body.tasks ? [body.tasks] : [])));
+        const commonBlockers = body.blockers?.trim() || "Không có";
+        const commonPlanTomorrow = body.planTomorrow?.trim() || "";
+        const commonHoursWorked = Number(body.hoursWorked) || 8;
+        const commonCompletionRate = Number(body.completionRate) || 0;
+        const commonStatus = body.status || "IN_PROGRESS";
+        const adminInstruction = body.adminNote?.trim() || body.note?.trim() || body.comment?.trim() || "";
+        const adminName = body.adminName?.trim() || "Quản trị viên (Giao việc)";
+
+        const createdReports = [];
+        const baseTime = Date.now();
+
+        empList.forEach((empItem, index) => {
+          const isObj = typeof empItem === 'object' && empItem !== null;
+          const empName = (isObj ? (empItem.employeeName || empItem.name) : String(empItem))?.trim() || "Nhân viên";
+          const dept = (isObj && empItem.department) ? empItem.department : (body.department || "Kỹ thuật / Backend");
+          const specificTitle = (isObj && empItem.title) ? empItem.title : commonTitle;
+
+          const reportId = `REP-${(baseTime + index).toString().slice(-4)}`;
+          const initialFeedbacks = [];
+          if (adminInstruction) {
+            initialFeedbacks.push({
+              id: `fb-${baseTime + index}`,
+              adminName: adminName,
+              comment: adminInstruction,
+              createdAt: new Date(baseTime + index * 10).toISOString()
+            });
+          }
+
+          const rep = {
+            id: (isObj && empItem.id) ? empItem.id : reportId,
+            employeeName: empName,
+            department: dept,
+            title: specificTitle,
+            tasksCompleted: (isObj && Array.isArray(empItem.tasksCompleted)) ? empItem.tasksCompleted : commonTasksCompleted,
+            tasksInProgress: (isObj && Array.isArray(empItem.tasksInProgress)) ? empItem.tasksInProgress : commonTasksInProgress,
+            blockers: (isObj && empItem.blockers) ? empItem.blockers : commonBlockers,
+            planTomorrow: (isObj && empItem.planTomorrow) ? empItem.planTomorrow : commonPlanTomorrow,
+            hoursWorked: (isObj && empItem.hoursWorked !== undefined) ? Number(empItem.hoursWorked) : commonHoursWorked,
+            completionRate: (isObj && empItem.completionRate !== undefined) ? Number(empItem.completionRate) : commonCompletionRate,
+            status: (isObj && empItem.status) ? empItem.status : commonStatus,
+            createdAt: new Date(baseTime + index * 100).toISOString(),
+            feedbacks: initialFeedbacks
+          };
+
+          createdReports.push(rep);
+        });
+
+        reports.unshift(...createdReports);
+        await saveReports(reports);
+
+        return res.status(201).json({
+          success: true,
+          message: `Đã giao việc thành công cho ${createdReports.length} nhân viên`,
+          count: createdReports.length,
+          reports: createdReports
+        });
+      }
+
+      // Xử lý nộp 1 báo cáo đơn lẻ
       const newReport = {
         id: body.id || `REP-${Date.now().toString().slice(-4)}`,
         employeeName: body.employeeName?.trim() || "Nhân viên mới",
